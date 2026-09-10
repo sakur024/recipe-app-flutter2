@@ -128,25 +128,51 @@ class MockDataService {
     try {
       final firestore = FirebaseFirestore.instance;
 
-      // Seed categories
-      final catSnap = await firestore.collection("App-Category").limit(1).get();
+      // Seed categories with short timeout so it never hangs
+      final catSnap = await firestore
+          .collection("App-Category")
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 4));
+
       if (catSnap.docs.isEmpty) {
         debugPrint("Seeding categories into Firestore...");
         for (var cat in defaultCategories) {
-          await firestore.collection("App-Category").add(cat);
+          try {
+            await firestore
+                .collection("App-Category")
+                .add(cat)
+                .timeout(const Duration(seconds: 3));
+          } catch (e) {
+            debugPrint("Category add skipped or timed out: $e");
+            break; // Stop seeding if permission denied or offline
+          }
         }
       }
 
-      // Seed recipes
-      final recipeSnap = await firestore.collection("Complete-Flutter-App").limit(1).get();
+      // Seed recipes with short timeout
+      final recipeSnap = await firestore
+          .collection("Complete-Flutter-App")
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 4));
+
       if (recipeSnap.docs.isEmpty) {
         debugPrint("Seeding recipes into Firestore...");
         for (var recipe in defaultRecipes) {
-          await firestore.collection("Complete-Flutter-App").add(recipe);
+          try {
+            await firestore
+                .collection("Complete-Flutter-App")
+                .add(recipe)
+                .timeout(const Duration(seconds: 3));
+          } catch (e) {
+            debugPrint("Recipe add skipped or timed out: $e");
+            break;
+          }
         }
       }
     } catch (e) {
-      debugPrint("Note: Auto-seeding skipped (Firestore not yet initialized or rules restricted: $e)");
+      debugPrint("Note: Auto-seeding skipped (Firestore not ready or rules restricted: $e)");
     }
   }
 }

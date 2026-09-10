@@ -3,9 +3,21 @@ import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Utils/constants.dart';
+import 'package:recipe_app2/Views/favorite_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  // Interactive user preferences state
+  bool _cookingNotifications = true;
+  bool _mealReminders = true;
+  String _selectedUnit = "Metric (Grams, ml, °C)";
+  String _selectedDiet = "No Restrictions";
 
   @override
   Widget build(BuildContext context) {
@@ -31,87 +43,153 @@ class ProfileScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
         child: Column(
           children: [
-            // Profile Card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 36,
-                    backgroundColor: kprimaryColor.withValues(alpha: 0.15),
-                    backgroundImage: (user?.photoURL != null)
-                        ? NetworkImage(user!.photoURL!)
-                        : null,
-                    child: (user?.photoURL == null)
-                        ? const Icon(
-                            Iconsax.user,
-                            size: 36,
-                            color: kprimaryColor,
-                          )
-                        : null,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            // Profile Card (Clickable to view/edit details)
+            InkWell(
+              onTap: () => _showEditProfileDialog(context, authProvider),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Stack(
                       children: [
-                        Text(
-                          user?.displayName ?? "Guest Chef",
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
+                        CircleAvatar(
+                          radius: 36,
+                          backgroundColor: kprimaryColor.withValues(alpha: 0.15),
+                          backgroundImage: (user?.photoURL != null && user!.photoURL!.isNotEmpty)
+                              ? NetworkImage(user.photoURL!)
+                              : null,
+                          child: (user?.photoURL == null || user!.photoURL!.isEmpty)
+                              ? const Icon(
+                                  Iconsax.user,
+                                  size: 36,
+                                  color: kprimaryColor,
+                                )
+                              : null,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          user?.email ?? "Signed in as Guest",
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: (user?.isGuest ?? true)
-                                ? Colors.amber.shade100
-                                : Colors.green.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            (user?.isGuest ?? true) ? "Guest Account" : "Google Account",
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: (user?.isGuest ?? true)
-                                  ? Colors.amber.shade900
-                                  : Colors.green.shade900,
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: kprimaryColor,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.edit,
+                              size: 14,
+                              color: Colors.white,
                             ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  user?.displayName ?? "Guest Chef",
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            user?.email ?? "Signed in as Guest",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: (user?.isGuest ?? true)
+                                  ? Colors.amber.shade100
+                                  : Colors.green.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              (user?.isGuest ?? true)
+                                  ? "Guest Account • Tap to edit"
+                                  : "Google Account",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: (user?.isGuest ?? true)
+                                    ? Colors.amber.shade900
+                                    : Colors.green.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 25),
+
+            // Cooking & Quick Shortcuts Section
+            _buildSection(
+              title: "My Cooking Activity",
+              items: [
+                _buildTile(
+                  icon: Iconsax.heart,
+                  title: "Favorite Recipes",
+                  subtitle: "View all bookmarked dishes",
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const FavoriteScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _buildTile(
+                  icon: Iconsax.filter,
+                  title: "Dietary Preference",
+                  subtitle: _selectedDiet,
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  onTap: () => _showDietaryDialog(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
 
             // Preferences Section
             _buildSection(
@@ -120,19 +198,57 @@ class ProfileScreen extends StatelessWidget {
                 _buildTile(
                   icon: Iconsax.notification,
                   title: "Cooking Notifications",
-                  subtitle: "Daily recipes & meal alerts",
+                  subtitle: "Daily recipe recommendations",
                   trailing: Switch(
-                    value: true,
-                    activeThumbImage: null,
+                    value: _cookingNotifications,
                     activeThumbColor: kprimaryColor,
-                    onChanged: (val) {},
+                    onChanged: (val) {
+                      setState(() {
+                        _cookingNotifications = val;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            val
+                                ? "Cooking notifications turned ON"
+                                : "Cooking notifications turned OFF",
+                          ),
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                _buildTile(
+                  icon: Iconsax.clock,
+                  title: "Meal Reminders",
+                  subtitle: "Alerts for breakfast, lunch & dinner",
+                  trailing: Switch(
+                    value: _mealReminders,
+                    activeThumbColor: kprimaryColor,
+                    onChanged: (val) {
+                      setState(() {
+                        _mealReminders = val;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            val
+                                ? "Meal reminders enabled"
+                                : "Meal reminders disabled",
+                          ),
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 _buildTile(
                   icon: Iconsax.weight_1,
                   title: "Measurement Units",
-                  subtitle: "Metric (Grams / Liters)",
+                  subtitle: _selectedUnit,
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  onTap: () => _showUnitsDialog(context),
                 ),
               ],
             ),
@@ -140,19 +256,28 @@ class ProfileScreen extends StatelessWidget {
 
             // App Info Section
             _buildSection(
-              title: "About",
+              title: "Support & About",
               items: [
                 _buildTile(
                   icon: Iconsax.info_circle,
                   title: "About Recipe App",
-                  subtitle: "Version 1.0.0 (Flutter & Firebase)",
+                  subtitle: "Version 1.0.0 • WTF Code & Flutter",
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  onTap: () => _showAboutDialog(context),
                 ),
                 _buildTile(
                   icon: Iconsax.shield_tick,
                   title: "Privacy Policy",
-                  subtitle: "Your data is secure",
+                  subtitle: "How we protect your cooking data",
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  onTap: () => _showPrivacyDialog(context),
+                ),
+                _buildTile(
+                  icon: Iconsax.message_question,
+                  title: "Help & FAQ",
+                  subtitle: "Common questions & support",
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  onTap: () => _showHelpDialog(context),
                 ),
               ],
             ),
@@ -180,7 +305,9 @@ class ProfileScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       title: const Text("Sign Out"),
-                      content: const Text("Are you sure you want to sign out?"),
+                      content: const Text(
+                        "Are you sure you want to sign out of Recipe App?",
+                      ),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx),
@@ -219,9 +346,294 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 30),
           ],
         ),
+      ),
+    );
+  }
+
+  // Edit Profile Name Dialog
+  void _showEditProfileDialog(BuildContext context, AppAuthProvider authProvider) {
+    final user = authProvider.currentUser;
+    final controller = TextEditingController(text: user?.displayName ?? "");
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Chef Profile"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Update your display name:",
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: "Enter your name",
+                filled: true,
+                fillColor: kbackgroundColor,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 15),
+            Text(
+              "Account: ${user?.email ?? 'Guest Session'}",
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Close"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kprimaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty) {
+                await authProvider.updateProfileName(newName);
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Profile name updated to: $newName"),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text("Save"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Units Selection Dialog
+  void _showUnitsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Measurement Units"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text("Metric System"),
+              subtitle: const Text("Grams (g), Milliliters (ml), Celsius (°C)"),
+              trailing: _selectedUnit.startsWith("Metric")
+                  ? const Icon(Icons.check, color: kprimaryColor)
+                  : null,
+              onTap: () {
+                setState(() {
+                  _selectedUnit = "Metric (Grams, ml, °C)";
+                });
+                Navigator.pop(ctx);
+              },
+            ),
+            ListTile(
+              title: const Text("Imperial System"),
+              subtitle: const Text("Ounces (oz), Cups, Fahrenheit (°F)"),
+              trailing: _selectedUnit.startsWith("Imperial")
+                  ? const Icon(Icons.check, color: kprimaryColor)
+                  : null,
+              onTap: () {
+                setState(() {
+                  _selectedUnit = "Imperial (oz, cups, °F)";
+                });
+                Navigator.pop(ctx);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Dietary Preferences Dialog
+  void _showDietaryDialog(BuildContext context) {
+    final diets = [
+      "No Restrictions",
+      "Vegetarian",
+      "Vegan",
+      "Keto",
+      "Gluten-Free",
+      "Halal",
+      "Low Carb",
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Dietary Preferences"),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: diets.length,
+            itemBuilder: (c, idx) {
+              final d = diets[idx];
+              return ListTile(
+                title: Text(d),
+                trailing: _selectedDiet == d
+                    ? const Icon(Icons.check, color: kprimaryColor)
+                    : null,
+                onTap: () {
+                  setState(() {
+                    _selectedDiet = d;
+                  });
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Dietary preference set to $d"),
+                      duration: const Duration(seconds: 1),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  // About Dialog
+  void _showAboutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Iconsax.book_1, color: kprimaryColor),
+            SizedBox(width: 10),
+            Text("About Recipe App"),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Complete Recipe App",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            SizedBox(height: 6),
+            Text(
+              "Built with Flutter, Firebase Authentication, Cloud Firestore, and Provider state management.\n\n"
+              "Features dynamic ingredient scaling, customizable servings, bookmarking, and meal planning.",
+              style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.4),
+            ),
+            SizedBox(height: 12),
+            Text(
+              "Version: 1.0.0\nBased on WTF Code Tutorial",
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Awesome!"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Privacy Policy Dialog
+  void _showPrivacyDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Privacy Policy"),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Your Data & Privacy",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              SizedBox(height: 8),
+              Text(
+                "• Your account information (email and name) is used exclusively for authentication.\n"
+                "• Your saved recipes and meal schedules are stored securely in Cloud Firestore.\n"
+                "• No personal cooking data is sold or shared with third parties.\n"
+                "• You can sign out at any time or delete your session by clearing app data.",
+                style: TextStyle(fontSize: 13, height: 1.5, color: Colors.black87),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Got it"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Help & FAQ Dialog
+  void _showHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Help & FAQ"),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Q: How do I change ingredient servings?",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              SizedBox(height: 4),
+              Text(
+                "A: Tap on any recipe, then use the (+) or (-) buttons under 'How many servings?'. All gram quantities will scale automatically.",
+                style: TextStyle(fontSize: 13, color: Colors.black87),
+              ),
+              SizedBox(height: 12),
+              Text(
+                "Q: How do I bookmark a recipe?",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              SizedBox(height: 4),
+              Text(
+                "A: Tap the heart icon on any recipe card or on the detail screen.",
+                style: TextStyle(fontSize: 13, color: Colors.black87),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Close"),
+          ),
+        ],
       ),
     );
   }
@@ -266,8 +678,13 @@ class ProfileScreen extends StatelessWidget {
     required String title,
     required String subtitle,
     Widget? trailing,
+    VoidCallback? onTap,
   }) {
     return ListTile(
+      onTap: onTap,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(

@@ -168,6 +168,26 @@ class AppAuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Update Profile Name
+  Future<void> updateProfileName(String newName) async {
+    final current = currentUser;
+    if (current != null) {
+      if (_auth?.currentUser != null) {
+        try {
+          await _auth!.currentUser!.updateDisplayName(newName);
+        } catch (_) {}
+      }
+      _guestUser = UserProfile(
+        uid: current.uid,
+        displayName: newName,
+        email: current.email,
+        photoURL: current.photoURL,
+        isGuest: current.isGuest,
+      );
+      notifyListeners();
+    }
+  }
+
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();

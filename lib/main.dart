@@ -12,15 +12,19 @@ import 'package:recipe_app2/services/mock_data_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
+    // Initialize Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    // Auto-seed initial categories and recipes into Firestore if empty
-    await MockDataService.seedFirestoreIfEmpty();
   } catch (e) {
-    debugPrint("Firebase initialization note (running with built-in mock & local state): $e");
+    debugPrint("Firebase initialization note: $e");
   }
+
+  // Launch the UI immediately so the app never hangs on startup
   runApp(const MyApp());
+
+  // Seed Firestore in the background if empty (non-blocking)
+  MockDataService.seedFirestoreIfEmpty();
 }
 
 class MyApp extends StatelessWidget {
