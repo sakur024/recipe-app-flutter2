@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:recipe_app2/Utils/constants.dart';
+import 'package:recipe_app2/Views/favorite_screen.dart';
+import 'package:recipe_app2/Views/meal_plan_screen.dart';
 import 'package:recipe_app2/Views/my_app_home_screen.dart';
 import 'package:recipe_app2/Views/profile_screen.dart';
 
@@ -20,8 +22,8 @@ class _AppMainScreenState extends State<AppMainScreen> {
     super.initState();
     pages = [
       const MyAppHomeScreen(),
-      _placeholderScreen("Favorite Recipes", Iconsax.heart5),
-      _placeholderScreen("Meal Planner", Iconsax.calendar5),
+      const FavoriteScreen(),
+      const MealPlanScreen(),
       const ProfileScreen(),
     ];
   }
@@ -79,49 +81,6 @@ class _AppMainScreenState extends State<AppMainScreen> {
         ],
       ),
       body: pages[selectedIndex],
-    );
-  }
-
-  Widget _placeholderScreen(String title, IconData icon) {
-    return Scaffold(
-      backgroundColor: kbackgroundColor,
-      appBar: AppBar(
-        backgroundColor: kbackgroundColor,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 72, color: kprimaryColor.withValues(alpha: 0.6)),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Coming in upcoming chunks",
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
