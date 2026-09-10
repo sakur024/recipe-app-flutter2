@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:recipe_app2/Utils/constants.dart';
+import 'package:recipe_app2/Views/my_app_home_screen.dart';
 import 'package:recipe_app2/Views/profile_screen.dart';
 
 class AppMainScreen extends StatefulWidget {
@@ -18,7 +19,7 @@ class _AppMainScreenState extends State<AppMainScreen> {
   void initState() {
     super.initState();
     pages = [
-      _placeholderScreen("Home Screen", Iconsax.home5),
+      const MyAppHomeScreen(),
       _placeholderScreen("Favorite Recipes", Iconsax.heart5),
       _placeholderScreen("Meal Planner", Iconsax.calendar5),
       const ProfileScreen(),
