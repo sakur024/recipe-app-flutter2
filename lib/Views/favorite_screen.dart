@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:recipe_app2/Provider/favorite_provider.dart';
 import 'package:recipe_app2/Utils/constants.dart';
 import 'package:recipe_app2/Views/recipe_detail_screen.dart';
+import 'package:recipe_app2/models/recipe_model.dart';
 import 'package:recipe_app2/services/mock_data_service.dart';
 
 class FavoriteScreen extends StatefulWidget {
@@ -14,6 +16,18 @@ class FavoriteScreen extends StatefulWidget {
 }
 
 class _FavoriteScreenState extends State<FavoriteScreen> {
+  Future<DocumentSnapshot?> _fetchFavorite(String favoriteId) async {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        return await FirebaseFirestore.instance
+            .collection("Complete-Flutter-App")
+            .doc(favoriteId)
+            .get();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = FavoriteProvider.of(context);
@@ -70,11 +84,8 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
               itemBuilder: (context, index) {
                 final String favoriteId = favoriteItems[index];
 
-                return FutureBuilder<DocumentSnapshot>(
-                  future: FirebaseFirestore.instance
-                      .collection("Complete-Flutter-App")
-                      .doc(favoriteId)
-                      .get(),
+                return FutureBuilder<DocumentSnapshot?>(
+                  future: _fetchFavorite(favoriteId),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return Container(
@@ -91,17 +102,18 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                     }
 
                     DocumentSnapshot? favoriteItem = snapshot.data;
+                    RecipeModel? matchedRecipe;
                     Map<String, dynamic>? data;
 
                     if (favoriteItem != null && favoriteItem.exists && favoriteItem.data() != null) {
                       data = favoriteItem.data() as Map<String, dynamic>;
                     } else {
-                      // Fallback lookup from mock recipes if offline or mock id
-                      final mockMatch = MockDataService.defaultRecipes.firstWhere(
-                        (r) => r['name'] == favoriteId,
-                        orElse: () => MockDataService.defaultRecipes.first,
+                      // Fallback lookup from mock recipes
+                      matchedRecipe = MockDataService.mockRecipes.firstWhere(
+                        (r) => r.id == favoriteId || r.name == favoriteId,
+                        orElse: () => MockDataService.mockRecipes.first,
                       );
-                      data = mockMatch;
+                      data = matchedRecipe.toMap();
                     }
 
                     final String name = data['name']?.toString() ?? "Recipe";
@@ -111,16 +123,15 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
 
                     return GestureDetector(
                       onTap: () {
-                        if (favoriteItem != null && favoriteItem.exists) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => RecipeDetailScreen(
-                                documentSnapshot: favoriteItem,
-                              ),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => RecipeDetailScreen(
+                              documentSnapshot: favoriteItem,
+                              recipe: matchedRecipe,
                             ),
-                          );
-                        }
+                          ),
+                        );
                       },
                       child: Stack(
                         children: [
@@ -225,7 +236,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                             right: 15,
                             child: GestureDetector(
                               onTap: () {
-                                provider.toggleFavorite(favoriteId);
+                                provider.toggleFavorite(favoriteItem ?? favoriteId);
                               },
                               child: Container(
                                 padding: const EdgeInsets.all(6),

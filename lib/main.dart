@@ -6,16 +6,19 @@ import 'package:recipe_app2/Provider/favorite_provider.dart';
 import 'package:recipe_app2/Provider/quantity.dart';
 import 'package:recipe_app2/Utils/constants.dart';
 import 'package:recipe_app2/Views/auth_gate.dart';
+import 'package:recipe_app2/firebase_options.dart';
 import 'package:recipe_app2/services/mock_data_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp();
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     // Auto-seed initial categories and recipes into Firestore if empty
     await MockDataService.seedFirestoreIfEmpty();
   } catch (e) {
-    debugPrint("Firebase initialization note: $e");
+    debugPrint("Firebase initialization note (running with built-in mock & local state): $e");
   }
   runApp(const MyApp());
 }

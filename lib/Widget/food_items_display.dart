@@ -3,24 +3,28 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:recipe_app2/Provider/favorite_provider.dart';
 import 'package:recipe_app2/Views/recipe_detail_screen.dart';
+import 'package:recipe_app2/models/recipe_model.dart';
 
 class FoodItemsDisplay extends StatelessWidget {
-  final DocumentSnapshot<Object?> documentSnapshot;
+  final DocumentSnapshot<Object?>? documentSnapshot;
+  final RecipeModel? recipe;
 
   const FoodItemsDisplay({
     super.key,
-    required this.documentSnapshot,
-  });
+    this.documentSnapshot,
+    this.recipe,
+  }) : assert(documentSnapshot != null || recipe != null);
 
   @override
   Widget build(BuildContext context) {
     final provider = FavoriteProvider.of(context);
-    final data = documentSnapshot.data() as Map<String, dynamic>? ?? {};
+    final data = (documentSnapshot?.data() as Map<String, dynamic>?) ?? {};
 
-    final String name = data['name']?.toString() ?? "Recipe";
-    final String image = data['image']?.toString() ?? "";
-    final String cal = data['cal']?.toString() ?? "0";
-    final String time = data['time']?.toString() ?? "0";
+    final String itemId = recipe?.id ?? documentSnapshot?.id ?? "recipe";
+    final String name = recipe?.name ?? (data['name']?.toString() ?? "Recipe");
+    final String image = recipe?.image ?? (data['image']?.toString() ?? "");
+    final String cal = recipe?.cal ?? (data['cal']?.toString() ?? "0");
+    final String time = recipe?.time ?? (data['time']?.toString() ?? "0");
 
     return GestureDetector(
       onTap: () {
@@ -29,6 +33,7 @@ class FoodItemsDisplay extends StatelessWidget {
           MaterialPageRoute(
             builder: (context) => RecipeDetailScreen(
               documentSnapshot: documentSnapshot,
+              recipe: recipe,
             ),
           ),
         );
@@ -120,13 +125,13 @@ class FoodItemsDisplay extends StatelessWidget {
                 backgroundColor: Colors.white,
                 child: InkWell(
                   onTap: () {
-                    provider.toggleFavorite(documentSnapshot);
+                    provider.toggleFavorite(documentSnapshot ?? itemId);
                   },
                   child: Icon(
-                    provider.isExist(documentSnapshot)
+                    provider.isExist(documentSnapshot ?? itemId)
                         ? Iconsax.heart5
                         : Iconsax.heart,
-                    color: provider.isExist(documentSnapshot)
+                    color: provider.isExist(documentSnapshot ?? itemId)
                         ? Colors.red
                         : Colors.black,
                     size: 20,

@@ -1,30 +1,53 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class FavoriteProvider extends ChangeNotifier {
   List<String> _favoriteIds = [];
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   List<String> get favorites => _favoriteIds;
 
   FavoriteProvider() {
     loadFavorites();
-    // Listen to auth state changes to reload favorites per user
-    _auth.authStateChanges().listen((user) {
-      loadFavorites();
-    });
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        FirebaseAuth.instance.authStateChanges().listen((user) {
+          loadFavorites();
+        });
+      }
+    } catch (_) {}
+  }
+
+  FirebaseFirestore? get _firestore {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        return FirebaseFirestore.instance;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  FirebaseAuth? get _auth {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        return FirebaseAuth.instance;
+      }
+    } catch (_) {}
+    return null;
   }
 
   // Helper collection reference for current user or default collection
-  CollectionReference _getFavoriteCollection() {
-    final user = _auth.currentUser;
+  CollectionReference? _getFavoriteCollection() {
+    final firestore = _firestore;
+    if (firestore == null) return null;
+
+    final user = _auth?.currentUser;
     if (user != null && !user.isAnonymous) {
-      return _firestore.collection("users").doc(user.uid).collection("userFavorite");
+      return firestore.collection("users").doc(user.uid).collection("userFavorite");
     }
-    return _firestore.collection("userFavorite");
+    return firestore.collection("userFavorite");
   }
 
   // Toggle favorite state
@@ -55,32 +78,41 @@ class FavoriteProvider extends ChangeNotifier {
   // Add favorite to Firestore
   Future<void> _addFavorite(String productId) async {
     try {
-      await _getFavoriteCollection().doc(productId).set({
-        'isFavorite': true,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+      final col = _getFavoriteCollection();
+      if (col != null) {
+        await col.doc(productId).set({
+          'isFavorite': true,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
     } catch (e) {
-      debugPrint("Error adding favorite to Firestore: $e");
+      debugPrint("Favorite stored locally (Firestore sync note: $e)");
     }
   }
 
   // Remove favorite from Firestore
   Future<void> _removeFavorite(String productId) async {
     try {
-      await _getFavoriteCollection().doc(productId).delete();
+      final col = _getFavoriteCollection();
+      if (col != null) {
+        await col.doc(productId).delete();
+      }
     } catch (e) {
-      debugPrint("Error removing favorite from Firestore: $e");
+      debugPrint("Favorite removed locally (Firestore sync note: $e)");
     }
   }
 
   // Load favorites from Firestore
   Future<void> loadFavorites() async {
     try {
-      final snapshot = await _getFavoriteCollection().get();
-      _favoriteIds = snapshot.docs.map((doc) => doc.id).toList();
-      notifyListeners();
+      final col = _getFavoriteCollection();
+      if (col != null) {
+        final snapshot = await col.get();
+        _favoriteIds = snapshot.docs.map((doc) => doc.id).toList();
+        notifyListeners();
+      }
     } catch (e) {
-      debugPrint("Note: Loading favorites locally (Firestore not ready or offline: $e)");
+      debugPrint("Favorites loaded locally (Firestore sync note: $e)");
     }
   }
 

@@ -7,10 +7,17 @@ import 'package:recipe_app2/Provider/quantity.dart';
 import 'package:recipe_app2/Utils/constants.dart';
 import 'package:recipe_app2/Widget/my_icon_button.dart';
 import 'package:recipe_app2/Widget/quantity_increment_decrement.dart';
+import 'package:recipe_app2/models/recipe_model.dart';
 
 class RecipeDetailScreen extends StatefulWidget {
-  final DocumentSnapshot<Object?> documentSnapshot;
-  const RecipeDetailScreen({super.key, required this.documentSnapshot});
+  final DocumentSnapshot<Object?>? documentSnapshot;
+  final RecipeModel? recipe;
+
+  const RecipeDetailScreen({
+    super.key,
+    this.documentSnapshot,
+    this.recipe,
+  }) : assert(documentSnapshot != null || recipe != null);
 
   @override
   State<RecipeDetailScreen> createState() => _RecipeDetailScreenState();
@@ -20,8 +27,9 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   @override
   void initState() {
     super.initState();
-    final data = widget.documentSnapshot.data() as Map<String, dynamic>? ?? {};
-    final rawAmounts = data['ingredientsAmount'];
+    final data = (widget.documentSnapshot?.data() as Map<String, dynamic>?) ?? {};
+    final rawAmounts = widget.recipe?.ingredientsAmount ?? data['ingredientsAmount'];
+
     List<double> baseAmounts = [];
     if (rawAmounts is List) {
       baseAmounts = rawAmounts
@@ -42,28 +50,29 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   Widget build(BuildContext context) {
     final provider = FavoriteProvider.of(context);
     final quantityProvider = Provider.of<QuantityProvider>(context);
-    final data = widget.documentSnapshot.data() as Map<String, dynamic>? ?? {};
+    final data = (widget.documentSnapshot?.data() as Map<String, dynamic>?) ?? {};
 
-    final String name = data['name']?.toString() ?? "Recipe Detail";
-    final String image = data['image']?.toString() ?? "";
-    final String cal = data['cal']?.toString() ?? "0";
-    final String time = data['time']?.toString() ?? "0";
-    final String rate = data['rate']?.toString() ?? "4.8";
-    final String reviews = data['reviews']?.toString() ?? "24";
+    final dynamic itemRef = widget.documentSnapshot ?? (widget.recipe?.id ?? "recipe");
+    final String name = widget.recipe?.name ?? (data['name']?.toString() ?? "Recipe Detail");
+    final String image = widget.recipe?.image ?? (data['image']?.toString() ?? "");
+    final String cal = widget.recipe?.cal ?? (data['cal']?.toString() ?? "0");
+    final String time = widget.recipe?.time ?? (data['time']?.toString() ?? "0");
+    final String rate = widget.recipe?.rate ?? (data['rate']?.toString() ?? "4.8");
+    final String reviews = widget.recipe?.reviews ?? (data['reviews']?.toString() ?? "24");
 
-    final rawIngredients = data['ingredientsName'];
+    final rawIngredients = widget.recipe?.ingredientsName ?? data['ingredientsName'];
     final List<String> ingredientsName = (rawIngredients is List)
         ? rawIngredients.map((e) => e.toString()).toList()
         : ["Ingredient 1", "Ingredient 2", "Ingredient 3"];
 
-    final rawImages = data['ingredientsImage'];
+    final rawImages = widget.recipe?.ingredientsImage ?? data['ingredientsImage'];
     final List<String> ingredientsImage = (rawImages is List)
         ? rawImages.map((e) => e.toString()).toList()
         : [];
 
     return Scaffold(
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: startCookingAndFavoriteButton(provider),
+      floatingActionButton: startCookingAndFavoriteButton(provider, itemRef),
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
         child: Column(
@@ -338,7 +347,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     );
   }
 
-  Widget startCookingAndFavoriteButton(FavoriteProvider provider) {
+  Widget startCookingAndFavoriteButton(FavoriteProvider provider, dynamic itemRef) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
@@ -392,13 +401,13 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
             ),
             child: IconButton(
               onPressed: () {
-                provider.toggleFavorite(widget.documentSnapshot);
+                provider.toggleFavorite(itemRef);
               },
               icon: Icon(
-                provider.isExist(widget.documentSnapshot)
+                provider.isExist(itemRef)
                     ? Iconsax.heart5
                     : Iconsax.heart,
-                color: provider.isExist(widget.documentSnapshot)
+                color: provider.isExist(itemRef)
                     ? Colors.red
                     : Colors.black,
                 size: 22,

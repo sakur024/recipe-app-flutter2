@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:recipe_app2/Utils/constants.dart';
@@ -6,6 +7,7 @@ import 'package:recipe_app2/Views/view_all_items.dart';
 import 'package:recipe_app2/Widget/banner.dart';
 import 'package:recipe_app2/Widget/food_items_display.dart';
 import 'package:recipe_app2/Widget/my_icon_button.dart';
+import 'package:recipe_app2/models/recipe_model.dart';
 import 'package:recipe_app2/services/mock_data_service.dart';
 
 class MyAppHomeScreen extends StatefulWidget {
@@ -20,19 +22,44 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
   String searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
 
-  final CollectionReference categoriesItems =
-      FirebaseFirestore.instance.collection("App-Category");
+  bool get _isFirebaseReady {
+    try {
+      return Firebase.apps.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
 
-  Query get filteredRecipes =>
-      FirebaseFirestore.instance.collection("Complete-Flutter-App").where(
-            'category',
-            isEqualTo: category,
-          );
+  CollectionReference? get categoriesItems {
+    if (_isFirebaseReady) {
+      try {
+        return FirebaseFirestore.instance.collection("App-Category");
+      } catch (_) {}
+    }
+    return null;
+  }
 
-  Query get allRecipes =>
-      FirebaseFirestore.instance.collection("Complete-Flutter-App");
+  Query? get filteredRecipes {
+    if (_isFirebaseReady) {
+      try {
+        return FirebaseFirestore.instance
+            .collection("Complete-Flutter-App")
+            .where('category', isEqualTo: category);
+      } catch (_) {}
+    }
+    return null;
+  }
 
-  Query get selectedRecipes =>
+  Query? get allRecipes {
+    if (_isFirebaseReady) {
+      try {
+        return FirebaseFirestore.instance.collection("Complete-Flutter-App");
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  Query? get selectedRecipes =>
       category == "All" ? allRecipes : filteredRecipes;
 
   @override
@@ -104,67 +131,7 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
                   ],
                 ),
               ),
-              StreamBuilder(
-                stream: selectedRecipes.snapshots(),
-                builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
-                  if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                    List<DocumentSnapshot> recipes = snapshot.data!.docs;
-
-                    // Filter locally by search query if user entered text
-                    if (searchQuery.isNotEmpty) {
-                      recipes = recipes.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>? ?? {};
-                        final name = data['name']?.toString().toLowerCase() ?? "";
-                        return name.contains(searchQuery.toLowerCase());
-                      }).toList();
-                    }
-
-                    if (recipes.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 40),
-                        child: Center(
-                          child: Text(
-                            "No recipes match your search",
-                            style: TextStyle(color: Colors.grey, fontSize: 16),
-                          ),
-                        ),
-                      );
-                    }
-
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 5, left: 15, bottom: 25),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: recipes
-                              .map((e) => FoodItemsDisplay(documentSnapshot: e))
-                              .toList(),
-                        ),
-                      ),
-                    );
-                  }
-
-                  // If waiting for Firestore or no docs in Firestore yet, render graceful preview
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 40),
-                        child: CircularProgressIndicator(),
-                      ),
-                    );
-                  }
-
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 30),
-                    child: Center(
-                      child: Text(
-                        "No recipes found in collection",
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
-                  );
-                },
-              ),
+              _buildRecipesSection(),
             ],
           ),
         ),
@@ -172,68 +139,178 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
     );
   }
 
-  Widget selectedCategory() {
-    return StreamBuilder(
-      stream: categoriesItems.snapshots(),
-      builder: (context, AsyncSnapshot<QuerySnapshot> streamSnapshot) {
-        List<String> catNames = [];
+  Widget _buildRecipesSection() {
+    final query = selectedRecipes;
 
-        if (streamSnapshot.hasData && streamSnapshot.data!.docs.isNotEmpty) {
-          catNames = streamSnapshot.data!.docs
-              .map((doc) => doc['name'].toString())
-              .toList();
-        } else {
-          // Fallback to default categories so UI is always responsive
-          catNames = MockDataService.defaultCategories
-              .map((c) => c['name'].toString())
-              .toList();
-        }
+    if (query != null) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: query.snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+            List<DocumentSnapshot> recipes = snapshot.data!.docs;
 
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: List.generate(
-              catNames.length,
-              (index) {
-                final catName = catNames[index];
-                final isSelected = category == catName;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      category = catName;
-                    });
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(25),
-                      color: isSelected ? kprimaryColor : Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
-                    margin: const EdgeInsets.only(right: 15),
-                    child: Text(
-                      catName,
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.grey.shade700,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+            if (searchQuery.isNotEmpty) {
+              recipes = recipes.where((doc) {
+                final data = doc.data() as Map<String, dynamic>? ?? {};
+                final name = data['name']?.toString().toLowerCase() ?? "";
+                return name.contains(searchQuery.toLowerCase());
+              }).toList();
+            }
+
+            if (recipes.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Text(
+                    "No recipes match your search",
+                    style: TextStyle(color: Colors.grey, fontSize: 16),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            }
+
+            return Padding(
+              padding: const EdgeInsets.only(top: 5, left: 15, bottom: 25),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: recipes
+                      .map((e) => FoodItemsDisplay(documentSnapshot: e))
+                      .toList(),
+                ),
+              ),
+            );
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          // Fallback to mock recipes if Firestore is empty
+          return _buildMockRecipesRow();
+        },
+      );
+    }
+
+    // Fallback when Firebase is not connected
+    return _buildMockRecipesRow();
+  }
+
+  Widget _buildMockRecipesRow() {
+    List<RecipeModel> items = MockDataService.mockRecipes;
+
+    if (category != "All") {
+      items = items.where((r) => r.category == category).toList();
+    }
+
+    if (searchQuery.isNotEmpty) {
+      items = items
+          .where((r) => r.name.toLowerCase().contains(searchQuery.toLowerCase()))
+          .toList();
+    }
+
+    if (items.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(
+          child: Text(
+            "No recipes found for this category",
+            style: TextStyle(color: Colors.grey, fontSize: 16),
           ),
-        );
-      },
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 5, left: 15, bottom: 25),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: items
+              .map((r) => FoodItemsDisplay(recipe: r))
+              .toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget selectedCategory() {
+    final catCol = categoriesItems;
+
+    if (catCol != null) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: catCol.snapshots(),
+        builder: (context, snapshot) {
+          List<String> catNames = [];
+          if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+            catNames = snapshot.data!.docs
+                .map((doc) => doc['name'].toString())
+                .toList();
+          } else {
+            catNames = MockDataService.defaultCategories
+                .map((c) => c['name'].toString())
+                .toList();
+          }
+          return _buildCategoryChips(catNames);
+        },
+      );
+    }
+
+    final catNames = MockDataService.defaultCategories
+        .map((c) => c['name'].toString())
+        .toList();
+    return _buildCategoryChips(catNames);
+  }
+
+  Widget _buildCategoryChips(List<String> catNames) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: List.generate(
+          catNames.length,
+          (index) {
+            final catName = catNames[index];
+            final isSelected = category == catName;
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  category = catName;
+                });
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(25),
+                  color: isSelected ? kprimaryColor : Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                margin: const EdgeInsets.only(right: 15),
+                child: Text(
+                  catName,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : Colors.grey.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
