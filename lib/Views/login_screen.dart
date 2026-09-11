@@ -628,7 +628,19 @@ class _LoginScreenState extends State<LoginScreen>
                     onPressed: authProvider.isLoading
                         ? null
                         : () async {
-                            await authProvider.signInWithGoogle();
+                            final success =
+                                await authProvider.signInWithGoogle();
+                            if (!success &&
+                                context.mounted &&
+                                authProvider.errorMessage != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(authProvider.errorMessage!),
+                                  backgroundColor: Colors.red.shade800,
+                                  duration: const Duration(seconds: 5),
+                                ),
+                              );
+                            }
                           },
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),

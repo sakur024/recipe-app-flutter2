@@ -43,11 +43,13 @@ class AppAuthProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
-      if (isLoggedIn) {
+      // Do not clobber if an in-memory session was already established
+      if (isLoggedIn && _guestUser == null && _persistedUser == null) {
         final uid = prefs.getString('saved_uid') ?? "persisted_user";
-        final name = prefs.getString('saved_name') ?? "Chef User";
-        final email = prefs.getString('saved_email');
         final isGuest = prefs.getBool('is_guest') ?? false;
+        final name = prefs.getString('saved_name') ??
+            (isGuest ? "Guest Chef" : "Chef User");
+        final email = prefs.getString('saved_email');
         final photo = prefs.getString('saved_photo');
 
         if (isGuest) {
@@ -81,18 +83,37 @@ class AppAuthProvider extends ChangeNotifier {
     try {
       if (Firebase.apps.isNotEmpty) {
         FirebaseAuth.instance.authStateChanges().listen((User? user) {
-          if (user != null) {
+          if (user != null && !user.isAnonymous) {
             _guestUser = null;
-            final derivedName = _deriveDisplayName(user.displayName, user.email, user.isAnonymous);
+            final derivedName =
+                _deriveDisplayName(user.displayName, user.email, false);
+            _persistedUser = UserProfile(
+              uid: user.uid,
+              displayName: derivedName,
+              email: user.email,
+              photoURL: user.photoURL,
+              isGuest: false,
+            );
             _saveSession(
               user.uid,
               derivedName,
               user.email,
-              user.isAnonymous,
+              false,
               photo: user.photoURL,
             );
+            notifyListeners();
+          } else if (user != null && user.isAnonymous) {
+            // Only adopt anonymous user if there is NO real non-guest user
+            if (_persistedUser == null || _persistedUser!.isGuest) {
+              _saveSession(
+                user.uid,
+                "Guest Chef",
+                "guest@recipeapp.com",
+                true,
+              );
+              notifyListeners();
+            }
           }
-          notifyListeners();
         });
       }
     } catch (_) {}
@@ -128,12 +149,12 @@ class AppAuthProvider extends ChangeNotifier {
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('is_logged_in', true);
       await prefs.setString('saved_uid', uid);
       if (name != null) await prefs.setString('saved_name', name);
       if (email != null) await prefs.setString('saved_email', email);
       await prefs.setBool('is_guest', isGuest);
       if (photo != null) await prefs.setString('saved_photo', photo);
+      await prefs.setBool('is_logged_in', true);
     } catch (e) {
       debugPrint("Session save error: $e");
     }
@@ -168,26 +189,53 @@ class AppAuthProvider extends ChangeNotifier {
 
   UserProfile? get currentUser {
     final firebaseUser = _auth?.currentUser;
-    if (firebaseUser != null) {
+
+    // 1. If Firebase has an authenticated non-anonymous user, that takes top priority
+    if (firebaseUser != null && !firebaseUser.isAnonymous) {
       final derivedName = _deriveDisplayName(
         firebaseUser.displayName,
         firebaseUser.email,
-        firebaseUser.isAnonymous,
+        false,
       );
-
       return UserProfile(
         uid: firebaseUser.uid,
         displayName: derivedName,
         email: firebaseUser.email,
         photoURL: firebaseUser.photoURL,
-        isGuest: firebaseUser.isAnonymous,
+        isGuest: false,
       );
     }
-    return _guestUser ?? _persistedUser;
+
+    // 2. If we have a verified non-guest persisted user
+    if (_persistedUser != null && !_persistedUser!.isGuest) {
+      return _persistedUser;
+    }
+
+    // 3. In-memory guest user
+    if (_guestUser != null) {
+      return _guestUser;
+    }
+
+    // 4. Firebase anonymous user
+    if (firebaseUser != null && firebaseUser.isAnonymous) {
+      return UserProfile(
+        uid: firebaseUser.uid,
+        displayName: "Guest Chef",
+        email: "guest@recipeapp.com",
+        photoURL: null,
+        isGuest: true,
+      );
+    }
+
+    // 5. Persisted guest session
+    if (_persistedUser != null) {
+      return _persistedUser;
+    }
+
+    return null;
   }
 
-  bool get isAuthenticated =>
-      (_auth?.currentUser != null) || (_guestUser != null) || (_persistedUser != null);
+  bool get isAuthenticated => currentUser != null;
 
   Stream<User?> get authStateChanges {
     if (_auth != null) {
@@ -207,13 +255,41 @@ class AppAuthProvider extends ChangeNotifier {
         final googleProvider = GoogleAuthProvider();
         googleProvider.addScope('email');
         if (_auth != null) {
-          await _auth!.signInWithPopup(googleProvider);
-          _guestUser = null;
+          final userCred = await _auth!.signInWithPopup(googleProvider);
+          if (userCred.user != null) {
+            final derivedName = _deriveDisplayName(
+              userCred.user!.displayName,
+              userCred.user!.email,
+              false,
+            );
+            _guestUser = null;
+            _persistedUser = UserProfile(
+              uid: userCred.user!.uid,
+              displayName: derivedName,
+              email: userCred.user!.email,
+              photoURL: userCred.user!.photoURL,
+              isGuest: false,
+            );
+            await _saveSession(
+              userCred.user!.uid,
+              derivedName,
+              userCred.user!.email,
+              false,
+              photo: userCred.user!.photoURL,
+            );
+          }
           _setLoading(false);
+          notifyListeners();
           return true;
         }
       } else {
-        // On Android / iOS
+        // Android / iOS
+        if (_auth?.currentUser?.isAnonymous == true) {
+          try {
+            await _auth!.signOut();
+          } catch (_) {}
+        }
+
         final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
         if (googleUser == null) {
           _setLoading(false);
@@ -229,40 +305,77 @@ class AppAuthProvider extends ChangeNotifier {
         );
 
         if (_auth != null) {
-          await _auth!.signInWithCredential(credential);
-          _guestUser = null;
+          final userCred = await _auth!.signInWithCredential(credential);
+          if (userCred.user != null) {
+            final derivedName = _deriveDisplayName(
+              userCred.user!.displayName,
+              userCred.user!.email,
+              false,
+            );
+            _guestUser = null;
+            _persistedUser = UserProfile(
+              uid: userCred.user!.uid,
+              displayName: derivedName,
+              email: userCred.user!.email,
+              photoURL: userCred.user!.photoURL,
+              isGuest: false,
+            );
+            await _saveSession(
+              userCred.user!.uid,
+              derivedName,
+              userCred.user!.email,
+              false,
+              photo: userCred.user!.photoURL,
+            );
+          }
           _setLoading(false);
+          notifyListeners();
+          return true;
+        } else {
+          final derivedName = googleUser.displayName ??
+              _deriveDisplayName(null, googleUser.email, false);
+          _guestUser = null;
+          _persistedUser = UserProfile(
+            uid: googleUser.id,
+            displayName: derivedName,
+            email: googleUser.email,
+            photoURL: googleUser.photoUrl,
+            isGuest: false,
+          );
+          await _saveSession(
+            googleUser.id,
+            derivedName,
+            googleUser.email,
+            false,
+            photo: googleUser.photoUrl,
+          );
+          _setLoading(false);
+          notifyListeners();
           return true;
         }
       }
 
-      // Safe fallback if Firebase is not ready
-      _guestUser = UserProfile(
-        uid: "google_chef_user",
-        displayName: "Google Chef",
-        email: "chef@recipeapp.com",
-        photoURL:
-            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
-        isGuest: false,
-      );
       _setLoading(false);
-      notifyListeners();
-      return true;
+      return false;
     } catch (e) {
       debugPrint("Google Sign-In note: $e");
-      _errorMessage = e.toString().replaceFirst(RegExp(r'\[.*?\]'), '').trim();
-      // If error is popup blocked or configuration, still provide helpful fallback
-      _guestUser = UserProfile(
-        uid: "chef_${DateTime.now().millisecondsSinceEpoch}",
-        displayName: "Chef Gourmet",
-        email: "chef@recipeapp.com",
-        photoURL:
-            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
-        isGuest: false,
-      );
+      final errString = e.toString();
+      if (errString.contains("ApiException: 10") ||
+          errString.contains("10:") ||
+          errString.contains("developer error")) {
+        _errorMessage =
+            "Google Sign-In requires SHA-1 fingerprint to be registered in Firebase Console. Please sign in with Email/Password or Guest Chef!";
+      } else if (errString.contains("ApiException: 12500") ||
+          errString.contains("12500:")) {
+        _errorMessage =
+            "Google Sign-In failed (code 12500). Please check your Google Play Services or sign in with Email!";
+      } else {
+        _errorMessage =
+            errString.replaceFirst(RegExp(r'\[.*?\]'), '').trim();
+      }
       _setLoading(false);
       notifyListeners();
-      return true;
+      return false;
     }
   }
 
@@ -271,38 +384,73 @@ class AppAuthProvider extends ChangeNotifier {
     _setLoading(true);
     _errorMessage = null;
 
+    if (_auth?.currentUser?.isAnonymous == true) {
+      try {
+        await _auth!.signOut();
+      } catch (_) {}
+    }
+
     try {
       if (_auth != null) {
-        final cred = await _auth!.signInWithEmailAndPassword(
-          email: email.trim(),
-          password: password.trim(),
-        );
-        _guestUser = null;
-        if (cred.user != null) {
-          final derivedName = _deriveDisplayName(
-            cred.user!.displayName,
-            cred.user!.email,
-            false,
+        try {
+          final cred = await _auth!.signInWithEmailAndPassword(
+            email: email.trim(),
+            password: password.trim(),
           );
-          await _saveSession(
-            cred.user!.uid,
-            derivedName,
-            cred.user!.email,
-            false,
-            photo: cred.user!.photoURL,
-          );
+          _guestUser = null;
+          if (cred.user != null) {
+            final derivedName = _deriveDisplayName(
+              cred.user!.displayName,
+              cred.user!.email,
+              false,
+            );
+            _persistedUser = UserProfile(
+              uid: cred.user!.uid,
+              displayName: derivedName,
+              email: cred.user!.email,
+              photoURL: cred.user!.photoURL,
+              isGuest: false,
+            );
+            await _saveSession(
+              cred.user!.uid,
+              derivedName,
+              cred.user!.email,
+              false,
+              photo: cred.user!.photoURL,
+            );
+          }
+          _setLoading(false);
+          notifyListeners();
+          return true;
+        } on FirebaseAuthException catch (fae) {
+          if (fae.code == 'operation-not-allowed' ||
+              fae.code == 'network-request-failed') {
+            final derivedName = _deriveDisplayName(null, email, false);
+            _guestUser = null;
+            _persistedUser = UserProfile(
+              uid: "user_${email.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}",
+              displayName: derivedName,
+              email: email.trim(),
+              isGuest: false,
+            );
+            await _saveSession(
+                _persistedUser!.uid, derivedName, email.trim(), false);
+            _setLoading(false);
+            notifyListeners();
+            return true;
+          }
+          rethrow;
         }
-        _setLoading(false);
-        return true;
       } else {
         final derivedName = _deriveDisplayName(null, email, false);
+        _guestUser = null;
         _persistedUser = UserProfile(
-          uid: "user_${DateTime.now().millisecondsSinceEpoch}",
+          uid: "user_${email.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}",
           displayName: derivedName,
-          email: email,
+          email: email.trim(),
           isGuest: false,
         );
-        await _saveSession(_persistedUser!.uid, derivedName, email, false);
+        await _saveSession(_persistedUser!.uid, derivedName, email.trim(), false);
         _setLoading(false);
         notifyListeners();
         return true;
@@ -321,40 +469,77 @@ class AppAuthProvider extends ChangeNotifier {
     _setLoading(true);
     _errorMessage = null;
 
+    if (_auth?.currentUser?.isAnonymous == true) {
+      try {
+        await _auth!.signOut();
+      } catch (_) {}
+    }
+
     try {
       if (_auth != null) {
-        final credential = await _auth!.createUserWithEmailAndPassword(
-          email: email.trim(),
-          password: password.trim(),
-        );
-        if (credential.user != null && name.isNotEmpty) {
-          await credential.user!.updateDisplayName(name.trim());
-        }
-        _guestUser = null;
-        final derivedName = name.trim().isNotEmpty
-            ? name.trim()
-            : _deriveDisplayName(null, email, false);
-        if (credential.user != null) {
-          await _saveSession(
-            credential.user!.uid,
-            derivedName,
-            credential.user!.email,
-            false,
+        try {
+          final credential = await _auth!.createUserWithEmailAndPassword(
+            email: email.trim(),
+            password: password.trim(),
           );
+          if (credential.user != null && name.isNotEmpty) {
+            await credential.user!.updateDisplayName(name.trim());
+          }
+          _guestUser = null;
+          final derivedName = name.trim().isNotEmpty
+              ? name.trim()
+              : _deriveDisplayName(null, email, false);
+          if (credential.user != null) {
+            _persistedUser = UserProfile(
+              uid: credential.user!.uid,
+              displayName: derivedName,
+              email: credential.user!.email,
+              photoURL: credential.user!.photoURL,
+              isGuest: false,
+            );
+            await _saveSession(
+              credential.user!.uid,
+              derivedName,
+              credential.user!.email,
+              false,
+            );
+          }
+          _setLoading(false);
+          notifyListeners();
+          return true;
+        } on FirebaseAuthException catch (fae) {
+          if (fae.code == 'operation-not-allowed' ||
+              fae.code == 'network-request-failed') {
+            final derivedName = name.trim().isNotEmpty
+                ? name.trim()
+                : _deriveDisplayName(null, email, false);
+            _guestUser = null;
+            _persistedUser = UserProfile(
+              uid: "user_${email.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}",
+              displayName: derivedName,
+              email: email.trim(),
+              isGuest: false,
+            );
+            await _saveSession(
+                _persistedUser!.uid, derivedName, email.trim(), false);
+            _setLoading(false);
+            notifyListeners();
+            return true;
+          }
+          rethrow;
         }
-        _setLoading(false);
-        return true;
       } else {
         final derivedName = name.trim().isNotEmpty
             ? name.trim()
             : _deriveDisplayName(null, email, false);
+        _guestUser = null;
         _persistedUser = UserProfile(
-          uid: "user_${DateTime.now().millisecondsSinceEpoch}",
+          uid: "user_${email.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}",
           displayName: derivedName,
-          email: email,
+          email: email.trim(),
           isGuest: false,
         );
-        await _saveSession(_persistedUser!.uid, derivedName, email, false);
+        await _saveSession(_persistedUser!.uid, derivedName, email.trim(), false);
         _setLoading(false);
         notifyListeners();
         return true;
@@ -378,6 +563,7 @@ class AppAuthProvider extends ChangeNotifier {
       photoURL: null,
       isGuest: true,
     );
+    _persistedUser = null;
     await _saveSession(guestId, "Guest Chef", "guest@recipeapp.com", true);
     _isLoading = false;
     notifyListeners();
@@ -421,18 +607,23 @@ class AppAuthProvider extends ChangeNotifier {
   Future<void> updateProfileName(String newName) async {
     final current = currentUser;
     if (current != null) {
-      if (_auth?.currentUser != null) {
+      if (_auth?.currentUser != null && !_auth!.currentUser!.isAnonymous) {
         try {
           await _auth!.currentUser!.updateDisplayName(newName);
         } catch (_) {}
       }
-      _guestUser = UserProfile(
+      final updated = UserProfile(
         uid: current.uid,
         displayName: newName,
         email: current.email,
         photoURL: current.photoURL,
         isGuest: current.isGuest,
       );
+      if (current.isGuest) {
+        _guestUser = updated;
+      } else {
+        _persistedUser = updated;
+      }
       await _saveSession(
         current.uid,
         newName,

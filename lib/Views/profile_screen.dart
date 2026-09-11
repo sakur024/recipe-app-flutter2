@@ -105,7 +105,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  user?.displayName ?? "Guest Chef",
+                                  (user?.displayName != null &&
+                                          user!.displayName!.isNotEmpty)
+                                      ? user.displayName!
+                                      : ((user?.isGuest ?? true)
+                                          ? "Guest Chef"
+                                          : "Chef Gourmet"),
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -122,7 +127,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            user?.email ?? "Signed in as Guest",
+                            user?.email ??
+                                ((user?.isGuest ?? true)
+                                    ? "Signed in as Guest"
+                                    : "Verified User"),
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.grey.shade600,
@@ -143,7 +151,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             child: Text(
                               (user?.isGuest ?? true)
                                   ? "Guest Account • Tap to edit"
-                                  : "Google Account",
+                                  : ((user?.photoURL != null &&
+                                          user!.photoURL!.contains("google"))
+                                      ? "Google Account • Verified"
+                                      : "Verified Account"),
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,

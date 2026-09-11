@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FavoriteProvider extends ChangeNotifier {
   List<String> _favoriteIds = [];
@@ -10,7 +11,7 @@ class FavoriteProvider extends ChangeNotifier {
   List<String> get favorites => _favoriteIds;
 
   FavoriteProvider() {
-    loadFavorites();
+    _initFavorites();
     try {
       if (Firebase.apps.isNotEmpty) {
         FirebaseAuth.instance.authStateChanges().listen((user) {
@@ -18,6 +19,35 @@ class FavoriteProvider extends ChangeNotifier {
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _initFavorites() async {
+    // 1. Instantly restore from local device storage so favorites NEVER reset
+    await _loadFromPrefs();
+    // 2. Sync with cloud in background
+    await loadFavorites();
+  }
+
+  Future<void> _loadFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList('saved_favorites');
+      if (saved != null) {
+        _favoriteIds = saved;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint("Error loading favorites from disk: $e");
+    }
+  }
+
+  Future<void> _saveToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('saved_favorites', _favoriteIds);
+    } catch (e) {
+      debugPrint("Error saving favorites to disk: $e");
+    }
   }
 
   FirebaseFirestore? get _firestore {
@@ -59,10 +89,12 @@ class FavoriteProvider extends ChangeNotifier {
     if (_favoriteIds.contains(productId)) {
       _favoriteIds.remove(productId);
       notifyListeners();
+      await _saveToPrefs();
       await _removeFavorite(productId);
     } else {
       _favoriteIds.add(productId);
       notifyListeners();
+      await _saveToPrefs();
       await _addFavorite(productId);
     }
   }
@@ -107,9 +139,14 @@ class FavoriteProvider extends ChangeNotifier {
     try {
       final col = _getFavoriteCollection();
       if (col != null) {
-        final snapshot = await col.get();
-        _favoriteIds = snapshot.docs.map((doc) => doc.id).toList();
-        notifyListeners();
+        final snapshot = await col.get().timeout(const Duration(seconds: 3));
+        if (snapshot.docs.isNotEmpty) {
+          final cloudIds = snapshot.docs.map((doc) => doc.id).toList();
+          final merged = {..._favoriteIds, ...cloudIds}.toList();
+          _favoriteIds = merged;
+          await _saveToPrefs();
+          notifyListeners();
+        }
       }
     } catch (e) {
       debugPrint("Favorites loaded locally (Firestore sync note: $e)");

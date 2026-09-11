@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PlannedMeal {
   final String id;
@@ -36,6 +38,33 @@ class PlannedMeal {
       'isCompleted': isCompleted,
       'createdAt': FieldValue.serverTimestamp(),
     };
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'day': day,
+      'mealType': mealType,
+      'recipeName': recipeName,
+      'time': time,
+      'calories': calories,
+      'imageUrl': imageUrl,
+      'isCompleted': isCompleted,
+    };
+  }
+
+  factory PlannedMeal.fromJson(Map<String, dynamic> data) {
+    return PlannedMeal(
+      id: data['id'] ?? 'meal_${DateTime.now().millisecondsSinceEpoch}',
+      day: data['day'] ?? 'Mon',
+      mealType: data['mealType'] ?? 'Breakfast',
+      recipeName: data['recipeName'] ?? 'Recipe',
+      time: data['time'] ?? '08:00 AM',
+      calories: data['calories'] ?? '250 Cal',
+      imageUrl: data['imageUrl'] ??
+          'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80',
+      isCompleted: data['isCompleted'] ?? false,
+    );
   }
 
   factory PlannedMeal.fromFirestore(DocumentSnapshot doc) {
@@ -87,8 +116,11 @@ class MealPlanProvider extends ChangeNotifier {
     _init();
   }
 
-  void _init() {
-    loadMeals();
+  Future<void> _init() async {
+    // 1. Immediately restore meals from local disk so user's meals NEVER reset
+    await _loadFromPrefs();
+    // 2. Sync with cloud in background
+    await loadMeals();
     try {
       if (Firebase.apps.isNotEmpty) {
         FirebaseAuth.instance.authStateChanges().listen((user) {
@@ -96,6 +128,32 @@ class MealPlanProvider extends ChangeNotifier {
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _loadFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('saved_meals');
+      if (raw != null && raw.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(raw);
+        _meals = decoded
+            .map((item) => PlannedMeal.fromJson(item as Map<String, dynamic>))
+            .toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint("Error loading meals from disk: $e");
+    }
+  }
+
+  Future<void> _saveToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonList = _meals.map((m) => m.toJson()).toList();
+      await prefs.setString('saved_meals', jsonEncode(jsonList));
+    } catch (e) {
+      debugPrint("Error saving meals to disk: $e");
+    }
   }
 
   FirebaseFirestore? get _firestore {
@@ -148,13 +206,22 @@ class MealPlanProvider extends ChangeNotifier {
       if (col != null) {
         final snapshot = await col.get().timeout(const Duration(seconds: 3));
         if (snapshot.docs.isNotEmpty) {
-          _meals = snapshot.docs.map((d) => PlannedMeal.fromFirestore(d)).toList();
+          final cloudMeals = snapshot.docs.map((d) => PlannedMeal.fromFirestore(d)).toList();
+          final existingIds = _meals.map((m) => m.id).toSet();
+          for (var cm in cloudMeals) {
+            if (!existingIds.contains(cm.id)) {
+              _meals.add(cm);
+              existingIds.add(cm.id);
+            }
+          }
+          await _saveToPrefs();
           _isLoading = false;
           notifyListeners();
           return;
-        } else {
-          // Auto-seed default meals if Firestore meal plan is empty
+        } else if (_meals.isEmpty) {
+          // Auto-seed default meals only if local meal plan is empty
           await _seedInitialMeals(col);
+          await _saveToPrefs();
           return;
         }
       }
@@ -162,9 +229,10 @@ class MealPlanProvider extends ChangeNotifier {
       debugPrint("Meal plan load note: $e");
     }
 
-    // Fallback default sample meals only if empty
+    // Fallback default sample meals only if completely empty
     if (_meals.isEmpty) {
       _meals = _getDefaultSampleMeals();
+      await _saveToPrefs();
     }
     _isLoading = false;
     notifyListeners();
@@ -172,18 +240,20 @@ class MealPlanProvider extends ChangeNotifier {
 
   // Add meal - Instant local update + non-blocking background Firestore sync
   Future<void> addMeal(PlannedMeal meal) async {
-    // 1. Immediately add to local state so UI updates in 0ms!
+    // 1. Immediately add to local state and persist to disk in 0ms!
     _meals.insert(0, meal);
     notifyListeners();
+    await _saveToPrefs();
 
     // 2. Persist to Firestore in background without blocking
     try {
       final col = _getCollection();
       if (col != null) {
-        col.add(meal.toMap()).then((docRef) {
+        col.add(meal.toMap()).then((docRef) async {
           final idx = _meals.indexWhere((m) => m.id == meal.id);
           if (idx != -1) {
             _meals[idx] = meal.copyWith(id: docRef.id);
+            await _saveToPrefs();
           }
         }).catchError((e) {
           debugPrint("Firestore addMeal background note: $e");
@@ -201,6 +271,7 @@ class MealPlanProvider extends ChangeNotifier {
     if (index != -1) {
       _meals[index] = meal.copyWith(isCompleted: newStatus);
       notifyListeners();
+      await _saveToPrefs();
     }
 
     try {
@@ -217,6 +288,7 @@ class MealPlanProvider extends ChangeNotifier {
   Future<void> deleteMeal(String id) async {
     _meals.removeWhere((m) => m.id == id);
     notifyListeners();
+    await _saveToPrefs();
 
     try {
       final col = _getCollection();
