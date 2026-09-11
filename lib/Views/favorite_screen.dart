@@ -108,10 +108,10 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                     if (favoriteItem != null && favoriteItem.exists && favoriteItem.data() != null) {
                       data = favoriteItem.data() as Map<String, dynamic>;
                     } else {
-                      // Fallback lookup from mock recipes
-                      matchedRecipe = MockDataService.mockRecipes.firstWhere(
+                      // Fallback lookup from all recipes (including published custom recipes)
+                      matchedRecipe = MockDataService.allRecipes.firstWhere(
                         (r) => r.id == favoriteId || r.name == favoriteId,
-                        orElse: () => MockDataService.mockRecipes.first,
+                        orElse: () => MockDataService.allRecipes.first,
                       );
                       data = matchedRecipe.toMap();
                     }

@@ -83,4 +83,15 @@ class RecipeModel {
       'ingredientsImage': ingredientsImage,
     };
   }
+
+  Map<String, dynamic> toJson() {
+    final map = toMap();
+    map['id'] = id;
+    return map;
+  }
+
+  factory RecipeModel.fromJson(Map<String, dynamic> json) {
+    final id = json['id']?.toString() ?? "";
+    return RecipeModel.fromMap(json, id);
+  }
 }

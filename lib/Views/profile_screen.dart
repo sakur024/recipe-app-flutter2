@@ -3,7 +3,10 @@ import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Utils/constants.dart';
+import 'package:recipe_app2/Views/add_edit_recipe_screen.dart';
 import 'package:recipe_app2/Views/favorite_screen.dart';
+import 'package:recipe_app2/Views/notifications_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,6 +21,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _mealReminders = true;
   String _selectedUnit = "Metric (Grams, ml, °C)";
   String _selectedDiet = "No Restrictions";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _cookingNotifications = prefs.getBool('pref_cooking_notifs') ?? true;
+        _mealReminders = prefs.getBool('pref_meal_reminders') ?? true;
+        _selectedUnit = prefs.getString('pref_unit') ?? "Metric (Grams, ml, °C)";
+        _selectedDiet = prefs.getString('pref_diet') ?? "No Restrictions";
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _savePreference(String key, dynamic value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (value is bool) {
+        await prefs.setBool(key, value);
+      } else if (value is String) {
+        await prefs.setString(key, value);
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -145,22 +177,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             decoration: BoxDecoration(
                               color: (user?.isGuest ?? true)
                                   ? Colors.amber.shade100
-                                  : Colors.green.shade100,
+                                  : (authProvider.isAdmin
+                                      ? Colors.purple.shade100
+                                      : Colors.green.shade100),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               (user?.isGuest ?? true)
                                   ? "Guest Account • Tap to edit"
-                                  : ((user?.photoURL != null &&
-                                          user!.photoURL!.contains("google"))
-                                      ? "Google Account • Verified"
-                                      : "Verified Account"),
+                                  : (authProvider.isAdmin
+                                      ? "Administrator • Full Access"
+                                      : ((user?.photoURL != null &&
+                                              user!.photoURL!.contains("google"))
+                                          ? "Google Account • Verified"
+                                          : "Verified Account")),
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: (user?.isGuest ?? true)
                                     ? Colors.amber.shade900
-                                    : Colors.green.shade900,
+                                    : (authProvider.isAdmin
+                                        ? Colors.purple.shade900
+                                        : Colors.green.shade900),
                               ),
                             ),
                           ),
@@ -172,6 +210,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 25),
+
+            // Admin Section (only visible to Admin)
+            if (authProvider.isAdmin) ...[
+              _buildSection(
+                title: "Recipe Management (Admin)",
+                items: [
+                  _buildTile(
+                    icon: Iconsax.add_circle,
+                    title: "Add New Recipe",
+                    subtitle: "Publish a dish to the cloud catalog",
+                    trailing: const Icon(Icons.arrow_forward_ios,
+                        size: 16, color: Colors.grey),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AddEditRecipeScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
 
             // Cooking & Quick Shortcuts Section
             _buildSection(
@@ -207,6 +270,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               title: "Preferences",
               items: [
                 _buildTile(
+                  icon: Iconsax.notification_bing,
+                  title: "Notifications Center",
+                  subtitle: "View alerts, reminders & tips",
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _buildTile(
                   icon: Iconsax.notification,
                   title: "Cooking Notifications",
                   subtitle: "Daily recipe recommendations",
@@ -217,6 +294,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       setState(() {
                         _cookingNotifications = val;
                       });
+                      _savePreference('pref_cooking_notifs', val);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
@@ -241,6 +319,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       setState(() {
                         _mealReminders = val;
                       });
+                      _savePreference('pref_meal_reminders', val);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(

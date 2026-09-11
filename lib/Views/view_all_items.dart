@@ -2,8 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:provider/provider.dart';
+import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Provider/favorite_provider.dart';
 import 'package:recipe_app2/Utils/constants.dart';
+import 'package:recipe_app2/Views/add_edit_recipe_screen.dart';
+import 'package:recipe_app2/Views/notifications_screen.dart';
 import 'package:recipe_app2/Views/recipe_detail_screen.dart';
 import 'package:recipe_app2/Widget/my_icon_button.dart';
 import 'package:recipe_app2/models/recipe_model.dart';
@@ -36,8 +40,33 @@ class _ViewAllItemsState extends State<ViewAllItems> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AppAuthProvider>(context);
+
     return Scaffold(
       backgroundColor: kbackgroundColor,
+      floatingActionButton: authProvider.isAdmin
+          ? FloatingActionButton.extended(
+              backgroundColor: kprimaryColor,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              icon: const Icon(Icons.add),
+              label: const Text(
+                "Add Recipe",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AddEditRecipeScreen(),
+                  ),
+                );
+                if (result == true && mounted) {
+                  setState(() {});
+                }
+              },
+            )
+          : null,
       appBar: AppBar(
         backgroundColor: kbackgroundColor,
         automaticallyImplyLeading: false,
@@ -62,7 +91,15 @@ class _ViewAllItemsState extends State<ViewAllItems> {
           const Spacer(),
           MyIconButton(
             icon: Iconsax.notification,
-            pressed: () {},
+            hasBadge: true,
+            pressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const NotificationsScreen(),
+                ),
+              );
+            },
           ),
           const SizedBox(width: 15),
         ],
@@ -81,19 +118,29 @@ class _ViewAllItemsState extends State<ViewAllItems> {
         stream: col.snapshots(),
         builder: (context, streamSnapshot) {
           if (streamSnapshot.hasData) {
-            // Combine Firestore docs and mock recipes to ensure rich catalog
+            // Combine custom recipes, Firestore docs, and mock recipes
             final List<dynamic> allItems = [];
             final Set<String> itemNames = {};
 
+            // 1. Add locally published/edited recipes first
+            for (var custom in MockDataService.customRecipes) {
+              if (!itemNames.contains(custom.name.toLowerCase())) {
+                allItems.add(custom);
+                itemNames.add(custom.name.toLowerCase());
+              }
+            }
+
+            // 2. Add Firestore documents
             for (var doc in streamSnapshot.data!.docs) {
               final data = doc.data() as Map<String, dynamic>? ?? {};
               final name = (data['name']?.toString() ?? "").toLowerCase();
-              if (name.isNotEmpty) {
+              if (name.isNotEmpty && !itemNames.contains(name)) {
                 itemNames.add(name);
                 allItems.add(doc);
               }
             }
 
+            // 3. Supplement with default recipes if not already present
             for (var mock in MockDataService.mockRecipes) {
               if (!itemNames.contains(mock.name.toLowerCase())) {
                 allItems.add(mock);
@@ -115,12 +162,12 @@ class _ViewAllItemsState extends State<ViewAllItems> {
             );
           }
 
-          return _renderGrid(MockDataService.mockRecipes);
+          return _renderGrid(MockDataService.allRecipes);
         },
       );
     }
 
-    return _renderGrid(MockDataService.mockRecipes);
+    return _renderGrid(MockDataService.allRecipes);
   }
 
   Widget _renderGrid(List<dynamic> items) {

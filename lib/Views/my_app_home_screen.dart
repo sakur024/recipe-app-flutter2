@@ -2,7 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:provider/provider.dart';
+import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Utils/constants.dart';
+import 'package:recipe_app2/Views/add_edit_recipe_screen.dart';
+import 'package:recipe_app2/Views/notifications_screen.dart';
 import 'package:recipe_app2/Views/view_all_items.dart';
 import 'package:recipe_app2/Widget/banner.dart';
 import 'package:recipe_app2/Widget/food_items_display.dart';
@@ -70,8 +74,33 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AppAuthProvider>(context);
+
     return Scaffold(
       backgroundColor: kbackgroundColor,
+      floatingActionButton: authProvider.isAdmin
+          ? FloatingActionButton.extended(
+              backgroundColor: kprimaryColor,
+              foregroundColor: Colors.white,
+              elevation: 4,
+              icon: const Icon(Icons.add),
+              label: const Text(
+                "Add Recipe",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AddEditRecipeScreen(),
+                  ),
+                );
+                if (result == true && mounted) {
+                  setState(() {});
+                }
+              },
+            )
+          : null,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
@@ -147,20 +176,31 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
         stream: query.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-            // Extract recipes from Firestore
+            // Extract recipes: custom recipes first, then Firestore, then mock recipes
             final List<dynamic> combinedList = [];
             final Set<String> loadedNames = {};
 
+            // 1. Add locally created/edited recipes first so new ones appear immediately
+            for (var custom in MockDataService.customRecipes) {
+              if (!loadedNames.contains(custom.name.toLowerCase())) {
+                if (category == "All" || custom.category.toLowerCase() == category.toLowerCase()) {
+                  combinedList.add(custom);
+                  loadedNames.add(custom.name.toLowerCase());
+                }
+              }
+            }
+
+            // 2. Add Firestore documents
             for (var doc in snapshot.data!.docs) {
               final data = doc.data() as Map<String, dynamic>? ?? {};
               final name = (data['name']?.toString() ?? "").toLowerCase();
-              if (name.isNotEmpty) {
+              if (name.isNotEmpty && !loadedNames.contains(name)) {
                 loadedNames.add(name);
                 combinedList.add(doc);
               }
             }
 
-            // Supplement with default recipes if not already present
+            // 3. Supplement with default recipes if not already present
             for (var mock in MockDataService.mockRecipes) {
               if (!loadedNames.contains(mock.name.toLowerCase())) {
                 if (category == "All" || mock.category.toLowerCase() == category.toLowerCase()) {
@@ -223,7 +263,7 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
             );
           }
 
-          // Fallback to mock recipes if Firestore is empty
+          // Fallback to all recipes if Firestore is empty
           return _buildMockRecipesRow();
         },
       );
@@ -234,7 +274,7 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
   }
 
   Widget _buildMockRecipesRow() {
-    List<RecipeModel> items = MockDataService.mockRecipes;
+    List<RecipeModel> items = MockDataService.allRecipes;
 
     if (category != "All") {
       items = items.where((r) => r.category == category).toList();
@@ -404,7 +444,15 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
         const Spacer(),
         MyIconButton(
           icon: Iconsax.notification,
-          pressed: () {},
+          hasBadge: true,
+          pressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const NotificationsScreen(),
+              ),
+            );
+          },
         ),
       ],
     );

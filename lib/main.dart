@@ -25,6 +25,9 @@ void main() async {
   PaintingBinding.instance.imageCache.maximumSize = 300;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024; // 100MB
 
+  // Initialize local custom recipes so they are available immediately
+  await MockDataService.init();
+
   // Launch the UI immediately so the app never hangs on startup
   runApp(const MyApp());
 

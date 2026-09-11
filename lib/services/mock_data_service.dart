@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:recipe_app2/models/recipe_model.dart';
 
 class MockDataService {
@@ -117,10 +119,131 @@ class MockDataService {
     },
   ];
 
+  static final List<RecipeModel> customRecipes = [];
+  static const String _storageKey = "saved_custom_recipes_v1";
+
+  static Future<void> init() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedJson = prefs.getString(_storageKey);
+      if (savedJson != null && savedJson.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(savedJson);
+        customRecipes.clear();
+        for (var item in list) {
+          if (item is Map<String, dynamic>) {
+            customRecipes.add(RecipeModel.fromJson(item));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Custom recipes init error: $e");
+    }
+  }
+
+  static Future<void> _persistCustomRecipes() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = customRecipes.map((r) => r.toJson()).toList();
+      await prefs.setString(_storageKey, jsonEncode(list));
+    } catch (e) {
+      debugPrint("Custom recipes persist error: $e");
+    }
+  }
+
+  static List<RecipeModel> get allRecipes {
+    return [...customRecipes, ...mockRecipes];
+  }
+
   static List<RecipeModel> get mockRecipes {
     return defaultRecipes.asMap().entries.map((entry) {
       return RecipeModel.fromMap(entry.value, "mock_${entry.key}");
     }).toList();
+  }
+
+  /// Saves a recipe to both local storage (immediate guarantee)
+  /// and Firestore (cloud sync with timeout).
+  static Future<bool> saveRecipe(RecipeModel recipe, {DocumentSnapshot? docSnap}) async {
+    // 1. Update in-memory and local storage immediately
+    final existingIndex = customRecipes.indexWhere(
+      (r) => r.id == recipe.id || r.name.trim().toLowerCase() == recipe.name.trim().toLowerCase(),
+    );
+    if (existingIndex >= 0) {
+      customRecipes[existingIndex] = recipe;
+    } else {
+      customRecipes.insert(0, recipe);
+    }
+    await _persistCustomRecipes();
+
+    // 2. Sync to Firestore in the cloud
+    bool cloudSuccess = false;
+    try {
+      final collection = FirebaseFirestore.instance.collection("Complete-Flutter-App");
+      if (docSnap != null) {
+        await docSnap.reference
+            .update(recipe.toMap())
+            .timeout(const Duration(seconds: 4));
+        cloudSuccess = true;
+      } else if (recipe.id.isNotEmpty &&
+          !recipe.id.startsWith("custom_") &&
+          !recipe.id.startsWith("mock_")) {
+        await collection
+            .doc(recipe.id)
+            .set(recipe.toMap(), SetOptions(merge: true))
+            .timeout(const Duration(seconds: 4));
+        cloudSuccess = true;
+      } else {
+        final docRef = await collection
+            .add(recipe.toMap())
+            .timeout(const Duration(seconds: 4));
+        cloudSuccess = true;
+        final updatedRecipe = RecipeModel(
+          id: docRef.id,
+          name: recipe.name,
+          image: recipe.image,
+          cal: recipe.cal,
+          time: recipe.time,
+          rate: recipe.rate,
+          reviews: recipe.reviews,
+          category: recipe.category,
+          ingredientsAmount: recipe.ingredientsAmount,
+          ingredientsName: recipe.ingredientsName,
+          ingredientsImage: recipe.ingredientsImage,
+        );
+        final idx = customRecipes.indexWhere((r) => r.id == recipe.id);
+        if (idx >= 0) {
+          customRecipes[idx] = updatedRecipe;
+          await _persistCustomRecipes();
+        }
+      }
+    } catch (e) {
+      debugPrint("Cloud sync note (saved locally): $e");
+    }
+
+    return cloudSuccess;
+  }
+
+  /// Deletes a recipe from local storage and Firestore.
+  static Future<bool> deleteRecipe(String id, {DocumentSnapshot? docSnap}) async {
+    customRecipes.removeWhere((r) => r.id == id);
+    await _persistCustomRecipes();
+
+    bool cloudSuccess = false;
+    try {
+      if (docSnap != null) {
+        await docSnap.reference.delete().timeout(const Duration(seconds: 4));
+        cloudSuccess = true;
+      } else if (id.isNotEmpty && !id.startsWith("custom_") && !id.startsWith("mock_")) {
+        await FirebaseFirestore.instance
+            .collection("Complete-Flutter-App")
+            .doc(id)
+            .delete()
+            .timeout(const Duration(seconds: 4));
+        cloudSuccess = true;
+      }
+    } catch (e) {
+      debugPrint("Cloud delete note (deleted locally): $e");
+    }
+    return cloudSuccess;
   }
 
   // Auto-seeds Firestore with initial categories and recipes if empty
