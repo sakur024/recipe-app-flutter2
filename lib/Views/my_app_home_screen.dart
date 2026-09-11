@@ -147,22 +147,50 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
         stream: query.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-            List<DocumentSnapshot> recipes = snapshot.data!.docs;
+            // Extract recipes from Firestore
+            final List<dynamic> combinedList = [];
+            final Set<String> loadedNames = {};
 
+            for (var doc in snapshot.data!.docs) {
+              final data = doc.data() as Map<String, dynamic>? ?? {};
+              final name = (data['name']?.toString() ?? "").toLowerCase();
+              if (name.isNotEmpty) {
+                loadedNames.add(name);
+                combinedList.add(doc);
+              }
+            }
+
+            // Supplement with default recipes if not already present
+            for (var mock in MockDataService.mockRecipes) {
+              if (!loadedNames.contains(mock.name.toLowerCase())) {
+                if (category == "All" || mock.category.toLowerCase() == category.toLowerCase()) {
+                  combinedList.add(mock);
+                  loadedNames.add(mock.name.toLowerCase());
+                }
+              }
+            }
+
+            // Apply search filter if active
+            List<dynamic> filtered = combinedList;
             if (searchQuery.isNotEmpty) {
-              recipes = recipes.where((doc) {
-                final data = doc.data() as Map<String, dynamic>? ?? {};
-                final name = data['name']?.toString().toLowerCase() ?? "";
+              filtered = filtered.where((item) {
+                String name = "";
+                if (item is DocumentSnapshot) {
+                  final data = item.data() as Map<String, dynamic>? ?? {};
+                  name = data['name']?.toString().toLowerCase() ?? "";
+                } else if (item is RecipeModel) {
+                  name = item.name.toLowerCase();
+                }
                 return name.contains(searchQuery.toLowerCase());
               }).toList();
             }
 
-            if (recipes.isEmpty) {
+            if (filtered.isEmpty) {
               return const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Center(
                   child: Text(
-                    "No recipes match your search",
+                    "No recipes found for this category",
                     style: TextStyle(color: Colors.grey, fontSize: 16),
                   ),
                 ),
@@ -174,9 +202,13 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: recipes
-                      .map((e) => FoodItemsDisplay(documentSnapshot: e))
-                      .toList(),
+                  children: filtered.map((item) {
+                    if (item is DocumentSnapshot) {
+                      return FoodItemsDisplay(documentSnapshot: item);
+                    } else {
+                      return FoodItemsDisplay(recipe: item as RecipeModel);
+                    }
+                  }).toList(),
                 ),
               ),
             );

@@ -316,7 +316,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                                 onPressed: authProvider.isLoading
                                     ? null
-                                    : () {
+                                    : () async {
                                         final email =
                                             _loginEmailController.text.trim();
                                         final pass =
@@ -331,8 +331,85 @@ class _LoginScreenState extends State<LoginScreen>
                                           );
                                           return;
                                         }
-                                        authProvider.signInWithEmailPassword(
-                                            email, pass);
+                                        final success = await authProvider
+                                            .signInWithEmailPassword(
+                                                email, pass);
+                                        if (!success && context.mounted) {
+                                          final err = authProvider.errorMessage
+                                                  ?.toLowerCase() ??
+                                              "";
+                                          if (err.contains("user-not-found") ||
+                                              err.contains("no user record") ||
+                                              err.contains("invalid-credential")) {
+                                            showDialog(
+                                              context: context,
+                                              builder: (ctx) => AlertDialog(
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                ),
+                                                title: const Text(
+                                                    "Create New Account?"),
+                                                content: Text(
+                                                  "No account found for '$email'. Would you like to create an account with this password now?",
+                                                ),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(ctx),
+                                                    child: const Text("Cancel"),
+                                                  ),
+                                                  ElevatedButton(
+                                                    style:
+                                                        ElevatedButton.styleFrom(
+                                                      backgroundColor:
+                                                          kprimaryColor,
+                                                      foregroundColor:
+                                                          Colors.white,
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                                12),
+                                                      ),
+                                                    ),
+                                                    onPressed: () async {
+                                                      Navigator.pop(ctx);
+                                                      final regSuccess =
+                                                          await authProvider
+                                                              .registerWithEmailPassword(
+                                                        email,
+                                                        pass,
+                                                        email.split('@').first,
+                                                      );
+                                                      if (context.mounted &&
+                                                          regSuccess) {
+                                                        ScaffoldMessenger.of(
+                                                                context)
+                                                            .showSnackBar(
+                                                          SnackBar(
+                                                            content: Text(
+                                                                "Account created! Welcome, $email!"),
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                    child: const Text(
+                                                        "Create Account"),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }
+                                        } else if (success && context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                  "Welcome back, $email!"),
+                                            ),
+                                          );
+                                        }
                                       },
                                 child: authProvider.isLoading
                                     ? const SizedBox(

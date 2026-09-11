@@ -5,6 +5,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 import 'package:recipe_app2/Provider/meal_plan_provider.dart';
 import 'package:recipe_app2/Utils/constants.dart';
+import 'package:recipe_app2/Views/recipe_detail_screen.dart';
 import 'package:recipe_app2/models/recipe_model.dart';
 import 'package:recipe_app2/services/mock_data_service.dart';
 
@@ -779,6 +780,55 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
+  void _openMealDetails(BuildContext context, PlannedMeal meal) {
+    RecipeModel? matchedRecipe;
+    for (var r in _availableRecipes) {
+      if (r.name.toLowerCase() == meal.recipeName.toLowerCase()) {
+        matchedRecipe = r;
+        break;
+      }
+    }
+
+    if (matchedRecipe == null) {
+      for (var r in MockDataService.mockRecipes) {
+        if (r.name.toLowerCase() == meal.recipeName.toLowerCase()) {
+          matchedRecipe = r;
+          break;
+        }
+      }
+    }
+
+    final cleanCal = meal.calories.replaceAll(RegExp(r'[^0-9]'), '');
+    final cleanTime = meal.time.replaceAll(RegExp(r'[^0-9]'), '');
+
+    matchedRecipe ??= RecipeModel(
+      id: meal.id,
+      name: meal.recipeName,
+      image: meal.imageUrl,
+      cal: cleanCal.isNotEmpty ? cleanCal : "250",
+      time: cleanTime.isNotEmpty ? cleanTime : "20",
+      rate: "4.8",
+      reviews: "18",
+      category: meal.mealType,
+      ingredientsAmount: [150.0, 50.0, 20.0],
+      ingredientsName: ["Primary Ingredient", "Seasoning & Herbs", "Olive Oil"],
+      ingredientsImage: [
+        "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=120&q=60",
+        "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&w=120&q=60",
+        "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=120&q=60",
+      ],
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RecipeDetailScreen(
+          recipe: matchedRecipe,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentDay = days[selectedDayIndex];
@@ -1039,7 +1089,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                   },
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 15),
-                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
@@ -1051,8 +1100,15 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                         ),
                       ],
                     ),
-                    child: Row(
-                      children: [
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => _openMealDetails(context, meal),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(14),
                           child: Image.network(
@@ -1150,7 +1206,10 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                             );
                           },
                         ),
-                      ],
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

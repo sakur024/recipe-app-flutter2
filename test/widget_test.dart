@@ -4,7 +4,11 @@ import 'package:recipe_app2/Provider/meal_plan_provider.dart';
 import 'package:recipe_app2/Provider/quantity.dart';
 import 'package:recipe_app2/models/recipe_model.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
   group('QuantityProvider Servings Scaling Tests', () {
     test('Initial servings count is 1 and scales correctly', () {
       final provider = QuantityProvider();

@@ -101,45 +101,50 @@ class FoodItemsDisplay extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 17,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Iconsax.flash_1,
-                      size: 16,
-                      color: Colors.grey,
+                      size: 15,
+                      color: kprimaryColor,
                     ),
+                    const SizedBox(width: 4),
                     Text(
                       "$cal Cal",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
-                        color: Colors.grey,
+                        color: kprimaryColor,
                       ),
                     ),
-                    const Text(
-                      " · ",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: Colors.grey,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Text(
+                        "•",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade400,
+                        ),
                       ),
                     ),
-                    const Icon(
+                    Icon(
                       Iconsax.clock,
-                      size: 16,
-                      color: Colors.grey,
+                      size: 15,
+                      color: Colors.grey.shade600,
                     ),
-                    const SizedBox(width: 5),
+                    const SizedBox(width: 4),
                     Text(
                       "$time Min",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
                         fontSize: 12,
-                        color: Colors.grey,
+                        color: Colors.grey.shade700,
                       ),
                     ),
                   ],

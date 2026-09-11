@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class UserProfile {
   final String uid;
@@ -25,14 +26,55 @@ class AppAuthProvider extends ChangeNotifier {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   bool _isLoading = false;
+  bool _isInitializing = true;
   String? _errorMessage;
   UserProfile? _guestUser;
+  UserProfile? _persistedUser;
 
   bool get isLoading => _isLoading;
+  bool get isInitializing => _isInitializing;
   String? get errorMessage => _errorMessage;
 
   AppAuthProvider() {
+    _initAuth();
+  }
+
+  Future<void> _initAuth() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+      if (isLoggedIn) {
+        final uid = prefs.getString('saved_uid') ?? "persisted_user";
+        final name = prefs.getString('saved_name') ?? "Chef User";
+        final email = prefs.getString('saved_email');
+        final isGuest = prefs.getBool('is_guest') ?? false;
+        final photo = prefs.getString('saved_photo');
+
+        if (isGuest) {
+          _guestUser = UserProfile(
+            uid: uid,
+            displayName: name,
+            email: email,
+            photoURL: photo,
+            isGuest: true,
+          );
+        } else {
+          _persistedUser = UserProfile(
+            uid: uid,
+            displayName: name,
+            email: email,
+            photoURL: photo,
+            isGuest: false,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Session restore note: $e");
+    }
+
     _listenToAuth();
+    _isInitializing = false;
+    notifyListeners();
   }
 
   void _listenToAuth() {
@@ -41,11 +83,74 @@ class AppAuthProvider extends ChangeNotifier {
         FirebaseAuth.instance.authStateChanges().listen((User? user) {
           if (user != null) {
             _guestUser = null;
+            final derivedName = _deriveDisplayName(user.displayName, user.email, user.isAnonymous);
+            _saveSession(
+              user.uid,
+              derivedName,
+              user.email,
+              user.isAnonymous,
+              photo: user.photoURL,
+            );
           }
           notifyListeners();
         });
       }
     } catch (_) {}
+  }
+
+  static String _deriveDisplayName(String? name, String? email, bool isAnonymous) {
+    if (name != null && name.trim().isNotEmpty) {
+      return name.trim();
+    }
+    if (isAnonymous) {
+      return "Guest Chef";
+    }
+    if (email != null && email.isNotEmpty) {
+      final prefix = email.split('@').first;
+      final formatted = prefix
+          .replaceAll(RegExp(r'[._\-]'), ' ')
+          .split(' ')
+          .where((w) => w.isNotEmpty)
+          .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
+          .join(' ')
+          .trim();
+      if (formatted.isNotEmpty) return formatted;
+    }
+    return "Gourmet Chef";
+  }
+
+  Future<void> _saveSession(
+    String uid,
+    String? name,
+    String? email,
+    bool isGuest, {
+    String? photo,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('is_logged_in', true);
+      await prefs.setString('saved_uid', uid);
+      if (name != null) await prefs.setString('saved_name', name);
+      if (email != null) await prefs.setString('saved_email', email);
+      await prefs.setBool('is_guest', isGuest);
+      if (photo != null) await prefs.setString('saved_photo', photo);
+    } catch (e) {
+      debugPrint("Session save error: $e");
+    }
+  }
+
+  Future<void> _clearSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('is_logged_in');
+      await prefs.remove('saved_uid');
+      await prefs.remove('saved_name');
+      await prefs.remove('saved_email');
+      await prefs.remove('is_guest');
+      await prefs.remove('saved_photo');
+    } catch (e) {
+      debugPrint("Session clear error: $e");
+    }
   }
 
   FirebaseAuth? get _auth {
@@ -64,19 +169,25 @@ class AppAuthProvider extends ChangeNotifier {
   UserProfile? get currentUser {
     final firebaseUser = _auth?.currentUser;
     if (firebaseUser != null) {
+      final derivedName = _deriveDisplayName(
+        firebaseUser.displayName,
+        firebaseUser.email,
+        firebaseUser.isAnonymous,
+      );
+
       return UserProfile(
         uid: firebaseUser.uid,
-        displayName: firebaseUser.displayName ??
-            (firebaseUser.isAnonymous ? "Guest Chef" : "Chef User"),
+        displayName: derivedName,
         email: firebaseUser.email,
         photoURL: firebaseUser.photoURL,
         isGuest: firebaseUser.isAnonymous,
       );
     }
-    return _guestUser;
+    return _guestUser ?? _persistedUser;
   }
 
-  bool get isAuthenticated => (_auth?.currentUser != null) || (_guestUser != null);
+  bool get isAuthenticated =>
+      (_auth?.currentUser != null) || (_guestUser != null) || (_persistedUser != null);
 
   Stream<User?> get authStateChanges {
     if (_auth != null) {
@@ -162,20 +273,36 @@ class AppAuthProvider extends ChangeNotifier {
 
     try {
       if (_auth != null) {
-        await _auth!.signInWithEmailAndPassword(
+        final cred = await _auth!.signInWithEmailAndPassword(
           email: email.trim(),
           password: password.trim(),
         );
         _guestUser = null;
+        if (cred.user != null) {
+          final derivedName = _deriveDisplayName(
+            cred.user!.displayName,
+            cred.user!.email,
+            false,
+          );
+          await _saveSession(
+            cred.user!.uid,
+            derivedName,
+            cred.user!.email,
+            false,
+            photo: cred.user!.photoURL,
+          );
+        }
         _setLoading(false);
         return true;
       } else {
-        _guestUser = UserProfile(
+        final derivedName = _deriveDisplayName(null, email, false);
+        _persistedUser = UserProfile(
           uid: "user_${DateTime.now().millisecondsSinceEpoch}",
-          displayName: email.split('@').first,
+          displayName: derivedName,
           email: email,
           isGuest: false,
         );
+        await _saveSession(_persistedUser!.uid, derivedName, email, false);
         _setLoading(false);
         notifyListeners();
         return true;
@@ -204,15 +331,30 @@ class AppAuthProvider extends ChangeNotifier {
           await credential.user!.updateDisplayName(name.trim());
         }
         _guestUser = null;
+        final derivedName = name.trim().isNotEmpty
+            ? name.trim()
+            : _deriveDisplayName(null, email, false);
+        if (credential.user != null) {
+          await _saveSession(
+            credential.user!.uid,
+            derivedName,
+            credential.user!.email,
+            false,
+          );
+        }
         _setLoading(false);
         return true;
       } else {
-        _guestUser = UserProfile(
+        final derivedName = name.trim().isNotEmpty
+            ? name.trim()
+            : _deriveDisplayName(null, email, false);
+        _persistedUser = UserProfile(
           uid: "user_${DateTime.now().millisecondsSinceEpoch}",
-          displayName: name.isNotEmpty ? name : email.split('@').first,
+          displayName: derivedName,
           email: email,
           isGuest: false,
         );
+        await _saveSession(_persistedUser!.uid, derivedName, email, false);
         _setLoading(false);
         notifyListeners();
         return true;
@@ -228,13 +370,15 @@ class AppAuthProvider extends ChangeNotifier {
   // Guest / Anonymous Sign-In
   Future<bool> signInAsGuest() async {
     _errorMessage = null;
+    final guestId = "guest_${DateTime.now().millisecondsSinceEpoch}";
     _guestUser = UserProfile(
-      uid: "guest_${DateTime.now().millisecondsSinceEpoch}",
+      uid: guestId,
       displayName: "Guest Chef",
       email: "guest@recipeapp.com",
       photoURL: null,
       isGuest: true,
     );
+    await _saveSession(guestId, "Guest Chef", "guest@recipeapp.com", true);
     _isLoading = false;
     notifyListeners();
 
@@ -254,6 +398,7 @@ class AppAuthProvider extends ChangeNotifier {
   // Sign Out
   Future<void> signOut() async {
     _setLoading(true);
+    await _clearSession();
     try {
       if (!kIsWeb) {
         await _googleSignIn
@@ -267,6 +412,7 @@ class AppAuthProvider extends ChangeNotifier {
       }
     } catch (_) {}
     _guestUser = null;
+    _persistedUser = null;
     _setLoading(false);
     notifyListeners();
   }
@@ -286,6 +432,13 @@ class AppAuthProvider extends ChangeNotifier {
         email: current.email,
         photoURL: current.photoURL,
         isGuest: current.isGuest,
+      );
+      await _saveSession(
+        current.uid,
+        newName,
+        current.email,
+        current.isGuest,
+        photo: current.photoURL,
       );
       notifyListeners();
     }

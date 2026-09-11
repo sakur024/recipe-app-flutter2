@@ -128,51 +128,55 @@ class MockDataService {
     try {
       final firestore = FirebaseFirestore.instance;
 
-      // Seed categories with short timeout so it never hangs
+      // Fetch existing categories
       final catSnap = await firestore
           .collection("App-Category")
-          .limit(1)
           .get()
           .timeout(const Duration(seconds: 4));
 
-      if (catSnap.docs.isEmpty) {
-        debugPrint("Seeding categories into Firestore...");
-        for (var cat in defaultCategories) {
+      final existingCatNames = catSnap.docs
+          .map((doc) => doc.data()['name']?.toString() ?? "")
+          .toSet();
+
+      for (var cat in defaultCategories) {
+        if (!existingCatNames.contains(cat['name'])) {
           try {
             await firestore
                 .collection("App-Category")
                 .add(cat)
                 .timeout(const Duration(seconds: 3));
           } catch (e) {
-            debugPrint("Category add skipped or timed out: $e");
-            break; // Stop seeding if permission denied or offline
+            debugPrint("Category add error: $e");
           }
         }
       }
 
-      // Seed recipes with short timeout
+      // Fetch existing recipes
       final recipeSnap = await firestore
           .collection("Complete-Flutter-App")
-          .limit(1)
           .get()
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 5));
 
-      if (recipeSnap.docs.isEmpty) {
-        debugPrint("Seeding recipes into Firestore...");
-        for (var recipe in defaultRecipes) {
+      final existingRecipeNames = recipeSnap.docs
+          .map((doc) => doc.data()['name']?.toString().toLowerCase() ?? "")
+          .toSet();
+
+      for (var recipe in defaultRecipes) {
+        final recipeName = (recipe['name']?.toString() ?? "").toLowerCase();
+        if (!existingRecipeNames.contains(recipeName)) {
           try {
             await firestore
                 .collection("Complete-Flutter-App")
                 .add(recipe)
                 .timeout(const Duration(seconds: 3));
+            debugPrint("Seeded missing recipe: ${recipe['name']}");
           } catch (e) {
-            debugPrint("Recipe add skipped or timed out: $e");
-            break;
+            debugPrint("Recipe add error: $e");
           }
         }
       }
     } catch (e) {
-      debugPrint("Note: Auto-seeding skipped (Firestore not ready or rules restricted: $e)");
+      debugPrint("Note: Auto-seeding skipped or partial: $e");
     }
   }
 }
