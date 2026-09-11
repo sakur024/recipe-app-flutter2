@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
@@ -30,6 +31,23 @@ class AppAuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
+  AppAuthProvider() {
+    _listenToAuth();
+  }
+
+  void _listenToAuth() {
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        FirebaseAuth.instance.authStateChanges().listen((User? user) {
+          if (user != null) {
+            _guestUser = null;
+          }
+          notifyListeners();
+        });
+      }
+    } catch (_) {}
+  }
+
   FirebaseAuth? get _auth {
     try {
       if (Firebase.apps.isNotEmpty) {
@@ -48,7 +66,8 @@ class AppAuthProvider extends ChangeNotifier {
     if (firebaseUser != null) {
       return UserProfile(
         uid: firebaseUser.uid,
-        displayName: firebaseUser.displayName ?? "Chef User",
+        displayName: firebaseUser.displayName ??
+            (firebaseUser.isAnonymous ? "Guest Chef" : "Chef User"),
         email: firebaseUser.email,
         photoURL: firebaseUser.photoURL,
         isGuest: firebaseUser.isAnonymous,
@@ -72,46 +91,62 @@ class AppAuthProvider extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      if (_auth == null) {
-        // Safe Demo fallback if Firebase is not connected yet
-        _guestUser = UserProfile(
-          uid: "google_demo_user",
-          displayName: "Google Chef",
-          email: "chef@gmail.com",
-          photoURL: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
-          isGuest: false,
+      if (kIsWeb) {
+        // On Web, use GoogleAuthProvider with signInWithPopup
+        final googleProvider = GoogleAuthProvider();
+        googleProvider.addScope('email');
+        if (_auth != null) {
+          await _auth!.signInWithPopup(googleProvider);
+          _guestUser = null;
+          _setLoading(false);
+          return true;
+        }
+      } else {
+        // On Android / iOS
+        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+        if (googleUser == null) {
+          _setLoading(false);
+          return false;
+        }
+
+        final GoogleSignInAuthentication googleAuth =
+            await googleUser.authentication;
+
+        final OAuthCredential credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
         );
-        _setLoading(false);
-        notifyListeners();
-        return true;
+
+        if (_auth != null) {
+          await _auth!.signInWithCredential(credential);
+          _guestUser = null;
+          _setLoading(false);
+          return true;
+        }
       }
 
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) {
-        _setLoading(false);
-        return false;
-      }
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      final OAuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
+      // Safe fallback if Firebase is not ready
+      _guestUser = UserProfile(
+        uid: "google_chef_user",
+        displayName: "Google Chef",
+        email: "chef@recipeapp.com",
+        photoURL:
+            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
+        isGuest: false,
       );
-
-      await _auth!.signInWithCredential(credential);
-      _guestUser = null;
       _setLoading(false);
+      notifyListeners();
       return true;
     } catch (e) {
-      // If Google sign-in fails due to missing Firebase keys/config, allow demo login
       debugPrint("Google Sign-In note: $e");
+      _errorMessage = e.toString().replaceFirst(RegExp(r'\[.*?\]'), '').trim();
+      // If error is popup blocked or configuration, still provide helpful fallback
       _guestUser = UserProfile(
-        uid: "google_demo_user",
-        displayName: "Google Chef",
-        email: "chef@gmail.com",
-        photoURL: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
+        uid: "chef_${DateTime.now().millisecondsSinceEpoch}",
+        displayName: "Chef Gourmet",
+        email: "chef@recipeapp.com",
+        photoURL:
+            "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
         isGuest: false,
       );
       _setLoading(false);
@@ -120,47 +155,115 @@ class AppAuthProvider extends ChangeNotifier {
     }
   }
 
-  // Guest / Anonymous Sign-In
-  Future<bool> signInAsGuest() async {
+  // Email & Password Sign-In
+  Future<bool> signInWithEmailPassword(String email, String password) async {
     _setLoading(true);
     _errorMessage = null;
 
     try {
       if (_auth != null) {
-        await _auth!.signInAnonymously();
+        await _auth!.signInWithEmailAndPassword(
+          email: email.trim(),
+          password: password.trim(),
+        );
+        _guestUser = null;
+        _setLoading(false);
+        return true;
       } else {
         _guestUser = UserProfile(
-          uid: "guest_${DateTime.now().millisecondsSinceEpoch}",
-          displayName: "Guest Chef",
-          email: "guest@recipeapp.com",
-          photoURL: null,
-          isGuest: true,
+          uid: "user_${DateTime.now().millisecondsSinceEpoch}",
+          displayName: email.split('@').first,
+          email: email,
+          isGuest: false,
         );
+        _setLoading(false);
+        notifyListeners();
+        return true;
       }
-      _setLoading(false);
-      notifyListeners();
-      return true;
     } catch (e) {
-      _guestUser = UserProfile(
-        uid: "guest_${DateTime.now().millisecondsSinceEpoch}",
-        displayName: "Guest Chef",
-        email: "guest@recipeapp.com",
-        photoURL: null,
-        isGuest: true,
-      );
+      _errorMessage = e.toString().replaceFirst(RegExp(r'\[.*?\]'), '').trim();
       _setLoading(false);
       notifyListeners();
-      return true;
+      return false;
     }
+  }
+
+  // Email & Password Registration
+  Future<bool> registerWithEmailPassword(
+      String email, String password, String name) async {
+    _setLoading(true);
+    _errorMessage = null;
+
+    try {
+      if (_auth != null) {
+        final credential = await _auth!.createUserWithEmailAndPassword(
+          email: email.trim(),
+          password: password.trim(),
+        );
+        if (credential.user != null && name.isNotEmpty) {
+          await credential.user!.updateDisplayName(name.trim());
+        }
+        _guestUser = null;
+        _setLoading(false);
+        return true;
+      } else {
+        _guestUser = UserProfile(
+          uid: "user_${DateTime.now().millisecondsSinceEpoch}",
+          displayName: name.isNotEmpty ? name : email.split('@').first,
+          email: email,
+          isGuest: false,
+        );
+        _setLoading(false);
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      _errorMessage = e.toString().replaceFirst(RegExp(r'\[.*?\]'), '').trim();
+      _setLoading(false);
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // Guest / Anonymous Sign-In
+  Future<bool> signInAsGuest() async {
+    _errorMessage = null;
+    _guestUser = UserProfile(
+      uid: "guest_${DateTime.now().millisecondsSinceEpoch}",
+      displayName: "Guest Chef",
+      email: "guest@recipeapp.com",
+      photoURL: null,
+      isGuest: true,
+    );
+    _isLoading = false;
+    notifyListeners();
+
+    // In background, attempt anonymous Firebase auth if enabled, without blocking UI
+    try {
+      if (_auth != null) {
+        _auth!.signInAnonymously().then((_) {}, onError: (e) {
+          debugPrint("Firebase anonymous sign-in note: $e");
+        });
+      }
+    } catch (e) {
+      debugPrint("Background guest auth note: $e");
+    }
+    return true;
   }
 
   // Sign Out
   Future<void> signOut() async {
     _setLoading(true);
     try {
-      await _googleSignIn.signOut();
+      if (!kIsWeb) {
+        await _googleSignIn
+            .signOut()
+            .timeout(const Duration(seconds: 3), onTimeout: () => null);
+      }
       if (_auth != null) {
-        await _auth!.signOut();
+        await _auth!
+            .signOut()
+            .timeout(const Duration(seconds: 3), onTimeout: () {});
       }
     } catch (_) {}
     _guestUser = null;

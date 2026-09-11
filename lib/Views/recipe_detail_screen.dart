@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 import 'package:recipe_app2/Provider/favorite_provider.dart';
+import 'package:recipe_app2/Provider/meal_plan_provider.dart';
 import 'package:recipe_app2/Provider/quantity.dart';
 import 'package:recipe_app2/Utils/constants.dart';
 import 'package:recipe_app2/Widget/my_icon_button.dart';
@@ -80,17 +81,31 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
             Stack(
               children: [
                 // Top header image
-                Container(
+                SizedBox(
                   height: MediaQuery.of(context).size.height / 2.1,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    image: image.isNotEmpty
-                        ? DecorationImage(
-                            fit: BoxFit.cover,
-                            image: NetworkImage(image),
-                          )
-                        : null,
-                  ),
+                  width: double.infinity,
+                  child: image.isNotEmpty
+                      ? Image.network(
+                          image,
+                          fit: BoxFit.cover,
+                          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                            if (wasSynchronouslyLoaded || frame != null) return child;
+                            return Container(
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.fastfood, size: 48, color: Colors.grey),
+                        ),
                 ),
                 // Back button & Notification
                 Positioned(
@@ -273,18 +288,25 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
                               color: Colors.grey.shade100,
-                              image: (idx < ingredientsImage.length &&
-                                      ingredientsImage[idx].isNotEmpty)
-                                  ? DecorationImage(
-                                      fit: BoxFit.cover,
-                                      image: NetworkImage(ingredientsImage[idx]),
-                                    )
-                                  : null,
                             ),
-                            child: (idx >= ingredientsImage.length ||
-                                    ingredientsImage[idx].isEmpty)
-                                ? const Icon(Icons.egg_alt_outlined, color: Colors.grey)
-                                : null,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: (idx < ingredientsImage.length &&
+                                      ingredientsImage[idx].isNotEmpty)
+                                  ? Image.network(
+                                      ingredientsImage[idx],
+                                      fit: BoxFit.cover,
+                                      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                                        if (wasSynchronouslyLoaded || frame != null) return child;
+                                        return Container(
+                                          color: Colors.grey.shade100,
+                                        );
+                                      },
+                                      errorBuilder: (context, error, stackTrace) =>
+                                          const Icon(Icons.egg_alt_outlined, color: Colors.grey),
+                                    )
+                                  : const Icon(Icons.egg_alt_outlined, color: Colors.grey),
+                            ),
                           ),
                         ),
                       ),
@@ -363,7 +385,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       child: Row(
         children: [
           Expanded(
-            child: ElevatedButton(
+            child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: kprimaryColor,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -374,18 +396,14 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                 elevation: 0,
               ),
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Cooking instructions starting... Bon Appétit!"),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+                _showScheduleDialog(context);
               },
-              child: const Text(
-                "Start Cooking",
+              icon: const Icon(Iconsax.calendar_add, size: 20),
+              label: const Text(
+                "Add to Plan",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  fontSize: 15,
                 ),
               ),
             ),
@@ -415,6 +433,128 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showScheduleDialog(BuildContext context) {
+    final data = (widget.documentSnapshot?.data() as Map<String, dynamic>?) ?? {};
+    final String recipeName = widget.recipe?.name ?? (data['name']?.toString() ?? "Recipe");
+    final String cal = widget.recipe?.cal ?? (data['cal']?.toString() ?? "250");
+    final String img = widget.recipe?.image ?? (data['image']?.toString() ?? "");
+    String chosenDay = "Mon";
+    String chosenType = "Lunch";
+    final days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    final types = ["Breakfast", "Lunch", "Dinner", "Snack"];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModal) => Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Add '$recipeName' to Meal Plan",
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              const Text("Select Day", style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: days.map((d) {
+                  final isSel = chosenDay == d;
+                  return ChoiceChip(
+                    label: Text(d),
+                    selected: isSel,
+                    selectedColor: kprimaryColor,
+                    labelStyle: TextStyle(
+                      color: isSel ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    onSelected: (val) {
+                      if (val) setModal(() => chosenDay = d);
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              const Text("Meal Time", style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: types.map((t) {
+                  final isSel = chosenType == t;
+                  return ChoiceChip(
+                    label: Text(t),
+                    selected: isSel,
+                    selectedColor: kprimaryColor,
+                    labelStyle: TextStyle(
+                      color: isSel ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    onSelected: (val) {
+                      if (val) setModal(() => chosenType = t);
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kprimaryColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () async {
+                    final meal = PlannedMeal(
+                      id: "plan_${DateTime.now().millisecondsSinceEpoch}",
+                      day: chosenDay,
+                      mealType: chosenType,
+                      recipeName: recipeName,
+                      time: chosenType == "Breakfast"
+                          ? "08:30 AM"
+                          : (chosenType == "Lunch" ? "01:00 PM" : "07:30 PM"),
+                      calories: "$cal Cal",
+                      imageUrl: img.isNotEmpty
+                          ? img
+                          : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80",
+                    );
+                    await Provider.of<MealPlanProvider>(context, listen: false).addMeal(meal);
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("Scheduled '$recipeName' for $chosenDay!"),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text(
+                    "Confirm Schedule",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

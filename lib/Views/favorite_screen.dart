@@ -152,22 +152,34 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                             ),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 100,
-                                  height: 80,
-                                  decoration: BoxDecoration(
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    width: 100,
+                                    height: 80,
                                     color: Colors.grey.shade200,
-                                    borderRadius: BorderRadius.circular(16),
-                                    image: image.isNotEmpty
-                                        ? DecorationImage(
+                                    child: image.isNotEmpty
+                                        ? Image.network(
+                                            image,
                                             fit: BoxFit.cover,
-                                            image: NetworkImage(image),
+                                            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                                              if (wasSynchronouslyLoaded || frame != null) return child;
+                                              return Container(
+                                                color: Colors.grey.shade200,
+                                                child: const Center(
+                                                  child: SizedBox(
+                                                    width: 16,
+                                                    height: 16,
+                                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            errorBuilder: (context, error, stackTrace) =>
+                                                const Icon(Icons.fastfood, color: Colors.grey),
                                           )
-                                        : null,
+                                        : const Icon(Icons.fastfood, color: Colors.grey),
                                   ),
-                                  child: image.isEmpty
-                                      ? const Icon(Icons.fastfood, color: Colors.grey)
-                                      : null,
                                 ),
                                 const SizedBox(width: 15),
                                 Expanded(

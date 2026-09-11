@@ -56,17 +56,34 @@ class BannerToExplore extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 0,
-            bottom: 0,
-            right: -20,
-            child: Image.network(
-              "https://pngimg.com/d/chef_PNG190.png",
-              errorBuilder: (context, error, stackTrace) => Container(
-                padding: const EdgeInsets.only(right: 30),
-                child: Icon(
-                  Icons.restaurant,
-                  size: 100,
-                  color: Colors.white.withValues(alpha: 0.3),
+            top: 15,
+            bottom: 15,
+            right: 15,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Image.network(
+                "https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&w=350&q=75",
+                fit: BoxFit.cover,
+                width: 130,
+                frameBuilder: (context, child, frame, wasSync) {
+                  if (wasSync || frame != null) return child;
+                  return Container(
+                    width: 130,
+                    color: Colors.white.withValues(alpha: 0.1),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 130,
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.restaurant,
+                    size: 60,
+                    color: Colors.white.withValues(alpha: 0.5),
+                  ),
                 ),
               ),
             ),

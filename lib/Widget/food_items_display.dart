@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:recipe_app2/Provider/favorite_provider.dart';
+import 'package:recipe_app2/Utils/constants.dart';
 import 'package:recipe_app2/Views/recipe_detail_screen.dart';
 import 'package:recipe_app2/models/recipe_model.dart';
 
@@ -46,24 +47,53 @@ class FoodItemsDisplay extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: double.infinity,
-                  height: 160,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(15),
-                    color: Colors.grey.shade200,
-                    image: image.isNotEmpty
-                        ? DecorationImage(
-                            fit: BoxFit.cover,
-                            image: NetworkImage(image),
-                          )
-                        : null,
-                  ),
-                  child: image.isEmpty
-                      ? const Center(
-                          child: Icon(Icons.fastfood, color: Colors.grey, size: 40),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(15),
+                  child: image.isNotEmpty
+                      ? Image.network(
+                          image,
+                          width: double.infinity,
+                          height: 160,
+                          fit: BoxFit.cover,
+                          frameBuilder:
+                              (context, child, frame, wasSync) {
+                            if (wasSync || frame != null) return child;
+                            return Container(
+                              width: double.infinity,
+                              height: 160,
+                              color: Colors.grey.shade100,
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: kprimaryColor,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                            width: double.infinity,
+                            height: 160,
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: Icon(Icons.fastfood,
+                                  color: Colors.grey, size: 40),
+                            ),
+                          ),
                         )
-                      : null,
+                      : Container(
+                          width: double.infinity,
+                          height: 160,
+                          color: Colors.grey.shade200,
+                          child: const Center(
+                            child: Icon(Icons.fastfood,
+                                color: Colors.grey, size: 40),
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 10),
                 Text(

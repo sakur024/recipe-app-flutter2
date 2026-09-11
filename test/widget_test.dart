@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:recipe_app2/Provider/auth_provider.dart';
+import 'package:recipe_app2/Provider/meal_plan_provider.dart';
 import 'package:recipe_app2/Provider/quantity.dart';
 import 'package:recipe_app2/models/recipe_model.dart';
 
@@ -62,4 +64,55 @@ void main() {
       expect(reconstructed.ingredientsName.length, 2);
     });
   });
+
+  group('AppAuthProvider Guest Login Tests', () {
+    test('signInAsGuest instantly authenticates and signOut resets state', () async {
+      final authProvider = AppAuthProvider();
+
+      // Sign in as Guest
+      final success = await authProvider.signInAsGuest();
+      expect(success, true);
+      expect(authProvider.isAuthenticated, true);
+      expect(authProvider.currentUser, isNotNull);
+      expect(authProvider.currentUser!.isGuest, true);
+      expect(authProvider.currentUser!.displayName, "Guest Chef");
+
+      // Sign out
+      await authProvider.signOut();
+      expect(authProvider.isAuthenticated, false);
+      expect(authProvider.currentUser, isNull);
+    });
+  });
+
+  group('MealPlanProvider Logic Tests', () {
+    test('Meals can be added, queried by day, and calories computed', () async {
+      final mealProvider = MealPlanProvider();
+
+      final testMeal = PlannedMeal(
+        id: "test_meal_1",
+        day: "Mon",
+        mealType: "Lunch",
+        recipeName: "Grilled Chicken Salad",
+        time: "12:30 PM",
+        calories: "250 Cal",
+        imageUrl: "https://example.com/salad.jpg",
+      );
+
+      await mealProvider.addMeal(testMeal);
+
+      final mondayMeals = mealProvider.mealsForDay("Mon");
+      expect(mondayMeals.any((m) => m.recipeName == "Grilled Chicken Salad"), true);
+      expect(mealProvider.totalCaloriesForDay("Mon") >= 250, true);
+
+      // Toggle completed
+      await mealProvider.toggleCompleted(testMeal);
+      final updated = mealProvider.mealsForDay("Mon").firstWhere((m) => m.id == "test_meal_1");
+      expect(updated.isCompleted, true);
+
+      // Delete meal
+      await mealProvider.deleteMeal("test_meal_1");
+      expect(mealProvider.mealsForDay("Mon").any((m) => m.id == "test_meal_1"), false);
+    });
+  });
 }
+
