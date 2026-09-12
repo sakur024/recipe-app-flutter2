@@ -38,7 +38,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   }
 
   Future<void> _loadAvailableRecipes() async {
-    _availableRecipes = MockDataService.mockRecipes;
+    // Start with all 24 verified recipes and custom recipes
+    _availableRecipes = List.from(MockDataService.allRecipes);
     try {
       if (Firebase.apps.isNotEmpty) {
         final snap = await FirebaseFirestore.instance
@@ -48,9 +49,31 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         if (snap.docs.isNotEmpty) {
           final cloudRecipes =
               snap.docs.map((d) => RecipeModel.fromFirestore(d)).toList();
+          
+          final Map<String, RecipeModel> combined = {};
+          // Add local updated recipes first
+          for (var r in MockDataService.allRecipes) {
+            combined[r.name.toLowerCase()] = r;
+          }
+          // Merge cloud recipes (keeping updated local images if cloud has old URL)
+          for (var cr in cloudRecipes) {
+            final key = cr.name.toLowerCase();
+            if (combined.containsKey(key)) {
+              // Prefer the verified recipe if image or category is newer
+              final local = combined[key]!;
+              if (local.image != cr.image) {
+                combined[key] = cr.copyWith(image: local.image);
+              } else {
+                combined[key] = cr;
+              }
+            } else {
+              combined[key] = cr;
+            }
+          }
+          
           if (mounted) {
             setState(() {
-              _availableRecipes = cloudRecipes;
+              _availableRecipes = combined.values.toList();
             });
           }
         }
@@ -443,7 +466,17 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                                                     recipe.image,
                                                     width: 60,
                                                     height: 60,
+                                                    cacheWidth: 180,
+                                                    cacheHeight: 180,
                                                     fit: BoxFit.cover,
+                                                    frameBuilder: (context, child, frame, wasSync) {
+                                                      if (wasSync || frame != null) return child;
+                                                      return Container(
+                                                        width: 60,
+                                                        height: 60,
+                                                        color: Colors.grey.shade100,
+                                                      );
+                                                    },
                                                     errorBuilder: (context,
                                                             error,
                                                             stackTrace) =>
@@ -1115,7 +1148,27 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                             meal.imageUrl,
                             width: 75,
                             height: 75,
+                            cacheWidth: 225,
+                            cacheHeight: 225,
                             fit: BoxFit.cover,
+                            frameBuilder: (context, child, frame, wasSync) {
+                              if (wasSync || frame != null) return child;
+                              return Container(
+                                width: 75,
+                                height: 75,
+                                color: Colors.grey.shade100,
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: kprimaryColor,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                             errorBuilder: (context, error, stackTrace) => Container(
                               width: 75,
                               height: 75,

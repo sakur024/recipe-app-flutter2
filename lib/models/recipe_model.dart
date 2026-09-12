@@ -94,4 +94,32 @@ class RecipeModel {
     final id = json['id']?.toString() ?? "";
     return RecipeModel.fromMap(json, id);
   }
+
+  RecipeModel copyWith({
+    String? id,
+    String? name,
+    String? image,
+    String? cal,
+    String? time,
+    String? rate,
+    String? reviews,
+    String? category,
+    List<double>? ingredientsAmount,
+    List<String>? ingredientsName,
+    List<String>? ingredientsImage,
+  }) {
+    return RecipeModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      image: image ?? this.image,
+      cal: cal ?? this.cal,
+      time: time ?? this.time,
+      rate: rate ?? this.rate,
+      reviews: reviews ?? this.reviews,
+      category: category ?? this.category,
+      ingredientsAmount: ingredientsAmount ?? this.ingredientsAmount,
+      ingredientsName: ingredientsName ?? this.ingredientsName,
+      ingredientsImage: ingredientsImage ?? this.ingredientsImage,
+    );
+  }
 }

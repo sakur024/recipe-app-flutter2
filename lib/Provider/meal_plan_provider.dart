@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:recipe_app2/services/mock_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PlannedMeal {
@@ -196,7 +197,7 @@ class MealPlanProvider extends ChangeNotifier {
     return total;
   }
 
-  // Load from Firestore
+  // Load from Firestore with deduplication and accurate sync
   Future<void> loadMeals() async {
     _isLoading = true;
     notifyListeners();
@@ -204,23 +205,48 @@ class MealPlanProvider extends ChangeNotifier {
     try {
       final col = _getCollection();
       if (col != null) {
-        final snapshot = await col.get().timeout(const Duration(seconds: 3));
+        final snapshot = await col.get().timeout(const Duration(seconds: 4));
         if (snapshot.docs.isNotEmpty) {
           final cloudMeals = snapshot.docs.map((d) => PlannedMeal.fromFirestore(d)).toList();
-          final existingIds = _meals.map((m) => m.id).toSet();
+
+          // Build a deduplicated map of meals.
+          // Cloud documents take precedence.
+          final Map<String, PlannedMeal> unifiedMeals = {};
+
+          // First add cloud meals keyed by their document ID
           for (var cm in cloudMeals) {
-            if (!existingIds.contains(cm.id)) {
-              _meals.add(cm);
-              existingIds.add(cm.id);
+            unifiedMeals[cm.id] = cm;
+          }
+
+          // Then merge local meals:
+          // If a local meal has a temporary local ID ('plan_' or 'meal_') but matches an existing
+          // cloud meal (same day, mealType, and recipeName), discard the temporary duplicate!
+          for (var lm in _meals) {
+            if (unifiedMeals.containsKey(lm.id)) {
+              // Already present from cloud
+              continue;
+            }
+            final isDuplicateOfCloud = cloudMeals.any(
+              (cm) =>
+                  cm.day.toLowerCase() == lm.day.toLowerCase() &&
+                  cm.mealType.toLowerCase() == lm.mealType.toLowerCase() &&
+                  cm.recipeName.toLowerCase() == lm.recipeName.toLowerCase(),
+            );
+            if (!isDuplicateOfCloud) {
+              unifiedMeals[lm.id] = lm;
             }
           }
+
+          _meals = unifiedMeals.values.toList();
+          _correctKnownRecipeImages();
           await _saveToPrefs();
           _isLoading = false;
           notifyListeners();
           return;
         } else if (_meals.isEmpty) {
-          // Auto-seed default meals only if local meal plan is empty
+          // Auto-seed default meals only if completely empty
           await _seedInitialMeals(col);
+          _correctKnownRecipeImages();
           await _saveToPrefs();
           return;
         }
@@ -234,33 +260,69 @@ class MealPlanProvider extends ChangeNotifier {
       _meals = _getDefaultSampleMeals();
       await _saveToPrefs();
     }
+    _correctKnownRecipeImages();
     _isLoading = false;
     notifyListeners();
   }
 
-  // Add meal - Instant local update + non-blocking background Firestore sync
+  // Ensure any cached meals with outdated photos (e.g. Oatmeal Banana Porridge) get the latest verified image
+  void _correctKnownRecipeImages() {
+    bool changed = false;
+    for (int i = 0; i < _meals.length; i++) {
+      final m = _meals[i];
+      // Match against official mock recipes
+      for (var def in MockDataService.defaultRecipes) {
+        if (def['name'].toString().toLowerCase() == m.recipeName.toLowerCase()) {
+          final officialImg = def['image']?.toString() ?? "";
+          if (officialImg.isNotEmpty && m.imageUrl != officialImg) {
+            _meals[i] = m.copyWith(imageUrl: officialImg);
+            changed = true;
+          }
+          break;
+        }
+      }
+    }
+    if (changed) {
+      _saveToPrefs();
+    }
+  }
+
+  // Add meal - Instant local update + await Firestore document ID so it never doubles on restart!
   Future<void> addMeal(PlannedMeal meal) async {
-    // 1. Immediately add to local state and persist to disk in 0ms!
+    // 1. Check if identical meal is already in local list for this day & mealType
+    final existingIdx = _meals.indexWhere(
+      (m) =>
+          m.day.toLowerCase() == meal.day.toLowerCase() &&
+          m.mealType.toLowerCase() == meal.mealType.toLowerCase() &&
+          m.recipeName.toLowerCase() == meal.recipeName.toLowerCase(),
+    );
+
+    if (existingIdx != -1) {
+      // Meal already scheduled for this slot, update it instead of creating a clone
+      _meals[existingIdx] = meal;
+      notifyListeners();
+      await _saveToPrefs();
+      return;
+    }
+
+    // 2. Immediately add to local state and persist to disk in 0ms
     _meals.insert(0, meal);
     notifyListeners();
     await _saveToPrefs();
 
-    // 2. Persist to Firestore in background without blocking
+    // 3. Persist to Firestore and update the meal's ID with the real Firestore ID
     try {
       final col = _getCollection();
       if (col != null) {
-        col.add(meal.toMap()).then((docRef) async {
-          final idx = _meals.indexWhere((m) => m.id == meal.id);
-          if (idx != -1) {
-            _meals[idx] = meal.copyWith(id: docRef.id);
-            await _saveToPrefs();
-          }
-        }).catchError((e) {
-          debugPrint("Firestore addMeal background note: $e");
-        });
+        final docRef = await col.add(meal.toMap()).timeout(const Duration(seconds: 4));
+        final idx = _meals.indexWhere((m) => m.id == meal.id);
+        if (idx != -1) {
+          _meals[idx] = meal.copyWith(id: docRef.id);
+          await _saveToPrefs();
+        }
       }
     } catch (e) {
-      debugPrint("Add meal error: $e");
+      debugPrint("Firestore addMeal note (saved locally): $e");
     }
   }
 
@@ -323,7 +385,7 @@ class MealPlanProvider extends ChangeNotifier {
         time: "08:00 AM",
         calories: "290 Cal",
         imageUrl:
-            "https://images.unsplash.com/photo-1517673132405-a56a62b18caf?auto=format&fit=crop&w=400&q=80",
+            "https://images.unsplash.com/photo-1584776296944-ab6fb57b0bdd?auto=format&fit=crop&w=400&q=80",
       ),
       PlannedMeal(
         id: "sample_2",
