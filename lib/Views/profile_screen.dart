@@ -3,7 +3,6 @@ import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Utils/constants.dart';
-import 'package:recipe_app2/Views/add_edit_recipe_screen.dart';
 import 'package:recipe_app2/Views/favorite_screen.dart';
 import 'package:recipe_app2/Views/notifications_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -177,28 +176,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             decoration: BoxDecoration(
                               color: (user?.isGuest ?? true)
                                   ? Colors.amber.shade100
-                                  : (authProvider.isAdmin
-                                      ? Colors.purple.shade100
-                                      : Colors.green.shade100),
+                                  : Colors.green.shade100,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               (user?.isGuest ?? true)
                                   ? "Guest Account • Tap to edit"
-                                  : (authProvider.isAdmin
-                                      ? "Administrator • Full Access"
-                                      : ((user?.photoURL != null &&
-                                              user!.photoURL!.contains("google"))
-                                          ? "Google Account • Verified"
-                                          : "Verified Account")),
+                                  : ((user?.photoURL != null &&
+                                          user!.photoURL!.contains("google"))
+                                      ? "Google Account • Verified"
+                                      : "Verified Account"),
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: (user?.isGuest ?? true)
                                     ? Colors.amber.shade900
-                                    : (authProvider.isAdmin
-                                        ? Colors.purple.shade900
-                                        : Colors.green.shade900),
+                                    : Colors.green.shade900,
                               ),
                             ),
                           ),
@@ -210,31 +203,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 25),
-
-            // Admin Section (only visible to Admin)
-            if (authProvider.isAdmin) ...[
-              _buildSection(
-                title: "Recipe Management (Admin)",
-                items: [
-                  _buildTile(
-                    icon: Iconsax.add_circle,
-                    title: "Add New Recipe",
-                    subtitle: "Publish a dish to the cloud catalog",
-                    trailing: const Icon(Icons.arrow_forward_ios,
-                        size: 16, color: Colors.grey),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AddEditRecipeScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-            ],
 
             // Cooking & Quick Shortcuts Section
             _buildSection(

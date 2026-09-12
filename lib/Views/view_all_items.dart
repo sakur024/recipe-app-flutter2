@@ -2,11 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:provider/provider.dart';
-import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Provider/favorite_provider.dart';
 import 'package:recipe_app2/Utils/constants.dart';
-import 'package:recipe_app2/Views/add_edit_recipe_screen.dart';
 import 'package:recipe_app2/Views/notifications_screen.dart';
 import 'package:recipe_app2/Views/recipe_detail_screen.dart';
 import 'package:recipe_app2/Widget/my_icon_button.dart';
@@ -40,33 +37,8 @@ class _ViewAllItemsState extends State<ViewAllItems> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AppAuthProvider>(context);
-
     return Scaffold(
       backgroundColor: kbackgroundColor,
-      floatingActionButton: authProvider.isAdmin
-          ? FloatingActionButton.extended(
-              backgroundColor: kprimaryColor,
-              foregroundColor: Colors.white,
-              elevation: 4,
-              icon: const Icon(Icons.add),
-              label: const Text(
-                "Add Recipe",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AddEditRecipeScreen(),
-                  ),
-                );
-                if (result == true && mounted) {
-                  setState(() {});
-                }
-              },
-            )
-          : null,
       appBar: AppBar(
         backgroundColor: kbackgroundColor,
         automaticallyImplyLeading: false,

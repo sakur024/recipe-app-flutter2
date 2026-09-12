@@ -401,17 +401,14 @@ class _LoginScreenState extends State<LoginScreen>
                                               ),
                                             );
                                           }
-                                         } else if (success && context.mounted) {
-                                           ScaffoldMessenger.of(context)
-                                               .showSnackBar(
-                                             SnackBar(
-                                               content: Text(
-                                                   authProvider.isAdmin
-                                                       ? "Welcome, Administrator! Full recipe management unlocked."
-                                                       : "Welcome back, $email!"),
-                                             ),
-                                           );
-                                         }
+                                          } else if (success && context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              SnackBar(
+                                                content: Text("Welcome back, $email!"),
+                                              ),
+                                            );
+                                          }
                                       },
                                 child: authProvider.isLoading
                                     ? const SizedBox(

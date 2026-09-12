@@ -3,7 +3,6 @@ import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Provider/meal_plan_provider.dart';
 import 'package:recipe_app2/Provider/quantity.dart';
 import 'package:recipe_app2/models/recipe_model.dart';
-import 'package:recipe_app2/services/mock_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -86,21 +85,6 @@ void main() {
       expect(authProvider.isAuthenticated, false);
       expect(authProvider.currentUser, isNull);
     });
-
-    test('Admin credentials (admin / 123456) unlocks Administrator role', () async {
-      final authProvider = AppAuthProvider();
-
-      final success =
-          await authProvider.signInWithEmailPassword("admin", "123456");
-      expect(success, true);
-      expect(authProvider.isAuthenticated, true);
-      expect(authProvider.isAdmin, true);
-      expect(authProvider.currentUser!.displayName, "Head Chef (Admin)");
-      expect(authProvider.currentUser!.isGuest, false);
-
-      await authProvider.signOut();
-      expect(authProvider.isAdmin, false);
-    });
   });
 
   group('MealPlanProvider Logic Tests', () {
@@ -131,35 +115,6 @@ void main() {
       // Delete meal
       await mealProvider.deleteMeal("test_meal_1");
       expect(mealProvider.mealsForDay("Mon").any((m) => m.id == "test_meal_1"), false);
-    });
-  });
-
-  group('MockDataService Recipe Publishing Tests', () {
-    test('Admin can publish new recipe and delete it', () async {
-      await MockDataService.init();
-
-      final customRecipe = RecipeModel(
-        id: "test_custom_001",
-        name: "Supreme Garlic Pasta",
-        image: "https://example.com/pasta.jpg",
-        cal: "450",
-        time: "30",
-        rate: "5.0",
-        reviews: "10",
-        category: "Dinner",
-        ingredientsAmount: [200.0, 50.0],
-        ingredientsName: ["Spaghetti", "Garlic Butter"],
-        ingredientsImage: ["https://example.com/1.jpg", "https://example.com/2.jpg"],
-      );
-
-      await MockDataService.saveRecipe(customRecipe);
-
-      expect(MockDataService.customRecipes.any((r) => r.id == "test_custom_001"), true);
-      expect(MockDataService.allRecipes.any((r) => r.name == "Supreme Garlic Pasta"), true);
-
-      // Clean up / delete
-      await MockDataService.deleteRecipe("test_custom_001");
-      expect(MockDataService.customRecipes.any((r) => r.id == "test_custom_001"), false);
     });
   });
 }

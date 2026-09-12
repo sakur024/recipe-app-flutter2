@@ -2,17 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
-import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Provider/favorite_provider.dart';
 import 'package:recipe_app2/Provider/meal_plan_provider.dart';
 import 'package:recipe_app2/Provider/quantity.dart';
 import 'package:recipe_app2/Utils/constants.dart';
-import 'package:recipe_app2/Views/add_edit_recipe_screen.dart';
 import 'package:recipe_app2/Views/notifications_screen.dart';
 import 'package:recipe_app2/Widget/my_icon_button.dart';
 import 'package:recipe_app2/Widget/quantity_increment_decrement.dart';
 import 'package:recipe_app2/models/recipe_model.dart';
-import 'package:recipe_app2/services/mock_data_service.dart';
 
 class RecipeDetailScreen extends StatefulWidget {
   final DocumentSnapshot<Object?>? documentSnapshot;
@@ -55,7 +52,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   Widget build(BuildContext context) {
     final provider = FavoriteProvider.of(context);
     final quantityProvider = Provider.of<QuantityProvider>(context);
-    final authProvider = Provider.of<AppAuthProvider>(context);
     final data = (widget.documentSnapshot?.data() as Map<String, dynamic>?) ?? {};
 
     final dynamic itemRef = widget.documentSnapshot ?? (widget.recipe?.id ?? "recipe");
@@ -126,31 +122,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                         },
                       ),
                       const Spacer(),
-                      if (authProvider.isAdmin) ...[
-                        MyIconButton(
-                          icon: Iconsax.edit,
-                          pressed: () async {
-                            final updated = await Navigator.push<bool>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => AddEditRecipeScreen(
-                                  recipe: widget.recipe,
-                                  documentSnapshot: widget.documentSnapshot,
-                                ),
-                              ),
-                            );
-                            if (updated == true && context.mounted) {
-                              Navigator.pop(context);
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        MyIconButton(
-                          icon: Icons.delete_outline,
-                          pressed: () => _confirmDeleteRecipe(context),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
                       MyIconButton(
                         icon: Iconsax.notification,
                         hasBadge: true,
@@ -593,63 +564,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  void _confirmDeleteRecipe(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Delete Recipe?"),
-        content: const Text(
-          "Are you sure you want to delete this recipe? It will be permanently removed from the catalog.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                final id = widget.recipe?.id ?? widget.documentSnapshot?.id ?? "";
-                await MockDataService.deleteRecipe(
-                  id,
-                  docSnap: widget.documentSnapshot,
-                );
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Recipe deleted successfully."),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                  Navigator.pop(context, true);
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Failed to delete recipe: $e"),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text("Delete"),
-          ),
-        ],
       ),
     );
   }
