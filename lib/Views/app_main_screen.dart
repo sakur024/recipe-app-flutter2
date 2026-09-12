@@ -80,7 +80,21 @@ class _AppMainScreenState extends State<AppMainScreen> {
           ),
         ],
       ),
-      body: pages[selectedIndex],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey<int>(selectedIndex),
+          child: pages[selectedIndex],
+        ),
+      ),
     );
   }
 }

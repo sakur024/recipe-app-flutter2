@@ -49,33 +49,45 @@ class FoodItemsDisplay extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(15),
-                  child: image.isNotEmpty
-                      ? Image.network(
-                          image,
-                          width: double.infinity,
-                          height: 160,
-                          fit: BoxFit.cover,
-                          frameBuilder:
-                              (context, child, frame, wasSync) {
-                            if (wasSync || frame != null) return child;
-                            return Container(
-                              width: double.infinity,
-                              height: 160,
-                              color: Colors.grey.shade100,
-                              child: const Center(
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: kprimaryColor,
+                  child: Hero(
+                    tag: 'recipe_image_$itemId',
+                    child: image.isNotEmpty
+                        ? Image.network(
+                            image,
+                            width: double.infinity,
+                            height: 160,
+                            fit: BoxFit.cover,
+                            frameBuilder:
+                                (context, child, frame, wasSync) {
+                              if (wasSync || frame != null) return child;
+                              return Container(
+                                width: double.infinity,
+                                height: 160,
+                                color: Colors.grey.shade100,
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: kprimaryColor,
+                                    ),
                                   ),
                                 ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                              width: double.infinity,
+                              height: 160,
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: Icon(Icons.fastfood,
+                                    color: Colors.grey, size: 40),
                               ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
+                            ),
+                          )
+                        : Container(
                             width: double.infinity,
                             height: 160,
                             color: Colors.grey.shade200,
@@ -84,16 +96,7 @@ class FoodItemsDisplay extends StatelessWidget {
                                   color: Colors.grey, size: 40),
                             ),
                           ),
-                        )
-                      : Container(
-                          width: double.infinity,
-                          height: 160,
-                          color: Colors.grey.shade200,
-                          child: const Center(
-                            child: Icon(Icons.fastfood,
-                                color: Colors.grey, size: 40),
-                          ),
-                        ),
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Text(

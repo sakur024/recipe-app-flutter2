@@ -132,7 +132,21 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
                   ],
                 ),
               ),
-              _buildRecipesSection(),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  );
+                },
+                child: KeyedSubtree(
+                  key: ValueKey<String>("$category-$searchQuery"),
+                  child: _buildRecipesSection(),
+                ),
+              ),
             ],
           ),
         ),
@@ -326,15 +340,19 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
                   category = catName;
                 });
               },
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(25),
                   color: isSelected ? kprimaryColor : Colors.white,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+                      color: isSelected
+                          ? kprimaryColor.withValues(alpha: 0.3)
+                          : Colors.black.withValues(alpha: 0.03),
+                      blurRadius: isSelected ? 8 : 4,
+                      offset: Offset(0, isSelected ? 3 : 2),
                     ),
                   ],
                 ),

@@ -81,32 +81,35 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           children: [
             Stack(
               children: [
-                // Top header image
-                SizedBox(
-                  height: MediaQuery.of(context).size.height / 2.1,
-                  width: double.infinity,
-                  child: image.isNotEmpty
-                      ? Image.network(
-                          image,
-                          fit: BoxFit.cover,
-                          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                            if (wasSynchronouslyLoaded || frame != null) return child;
-                            return Container(
+                // Top header image with Hero animation
+                Hero(
+                  tag: 'recipe_image_${widget.recipe?.id ?? widget.documentSnapshot?.id ?? "recipe"}',
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height / 2.1,
+                    width: double.infinity,
+                    child: image.isNotEmpty
+                        ? Image.network(
+                            image,
+                            fit: BoxFit.cover,
+                            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                              if (wasSynchronouslyLoaded || frame != null) return child;
+                              return Container(
+                                color: Colors.grey.shade200,
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) => Container(
                               color: Colors.grey.shade200,
-                              child: const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) => Container(
+                              child: const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                            ),
+                          )
+                        : Container(
                             color: Colors.grey.shade200,
-                            child: const Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                            child: const Icon(Icons.fastfood, size: 48, color: Colors.grey),
                           ),
-                        )
-                      : Container(
-                          color: Colors.grey.shade200,
-                          child: const Icon(Icons.fastfood, size: 48, color: Colors.grey),
-                        ),
+                  ),
                 ),
                 // Back button & Actions
                 Positioned(
