@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:recipe_app2/Utils/constants.dart';
+import 'package:recipe_app2/Views/view_all_items.dart';
 
 class BannerToExplore extends StatelessWidget {
-  const BannerToExplore({super.key});
+  final VoidCallback? onExplore;
+  const BannerToExplore({super.key, this.onExplore});
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +44,18 @@ class BannerToExplore extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
-                  onPressed: () {},
+                  onPressed: () {
+                    if (onExplore != null) {
+                      onExplore!();
+                    } else {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ViewAllItems(),
+                        ),
+                      );
+                    }
+                  },
                   child: const Text(
                     "Explore",
                     style: TextStyle(

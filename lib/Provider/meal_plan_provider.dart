@@ -415,17 +415,64 @@ class MealPlanProvider extends ChangeNotifier {
 
   // Delete meal - Instant 0ms response
   Future<void> deleteMeal(String id) async {
+    final idx = _meals.indexWhere((m) => m.id == id);
+    PlannedMeal? removed;
+    if (idx != -1) {
+      removed = _meals[idx];
+    }
     _meals.removeWhere((m) => m.id == id);
     notifyListeners();
     _saveToPrefs();
 
     try {
       final col = _getCollection();
-      if (col != null && !id.startsWith("sample_") && !id.startsWith("meal_") && !id.startsWith("plan_")) {
-        col.doc(id).delete().catchError((_) {});
+      if (col != null) {
+        if (!id.startsWith("sample_") && !id.startsWith("meal_") && !id.startsWith("plan_")) {
+          col.doc(id).delete().catchError((_) {});
+        } else if (removed != null) {
+          // If the local ID wasn't updated yet, delete matching doc in Firestore
+          col.where('recipeName', isEqualTo: removed.recipeName)
+              .where('day', isEqualTo: removed.day)
+              .get()
+              .then((snap) {
+            for (var doc in snap.docs) {
+              doc.reference.delete().catchError((_) {});
+            }
+          }).catchError((_) {});
+        }
       }
     } catch (e) {
       debugPrint("Delete meal note: $e");
+    }
+  }
+
+  // Clear all meals for a given day - Instant 0ms response
+  Future<void> clearMealsForDay(String day) async {
+    final toRemove = _meals.where((m) => m.day.toLowerCase() == day.toLowerCase()).toList();
+    _meals.removeWhere((m) => m.day.toLowerCase() == day.toLowerCase());
+    notifyListeners();
+    _saveToPrefs();
+
+    try {
+      final col = _getCollection();
+      if (col != null) {
+        for (var meal in toRemove) {
+          if (!meal.id.startsWith("sample_") && !meal.id.startsWith("meal_") && !meal.id.startsWith("plan_")) {
+            col.doc(meal.id).delete().catchError((_) {});
+          } else {
+            col.where('recipeName', isEqualTo: meal.recipeName)
+                .where('day', isEqualTo: meal.day)
+                .get()
+                .then((snap) {
+              for (var doc in snap.docs) {
+                doc.reference.delete().catchError((_) {});
+              }
+            }).catchError((_) {});
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Clear meals for day note: $e");
     }
   }
 

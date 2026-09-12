@@ -1,7 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Provider/meal_plan_provider.dart';
 import 'package:recipe_app2/Provider/quantity.dart';
+import 'package:recipe_app2/Widget/banner.dart';
 import 'package:recipe_app2/models/recipe_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -115,6 +117,34 @@ void main() {
       // Delete meal
       await mealProvider.deleteMeal("test_meal_1");
       expect(mealProvider.mealsForDay("Mon").any((m) => m.id == "test_meal_1"), false);
+
+      // Clear all meals for day
+      await mealProvider.clearMealsForDay("Mon");
+      expect(mealProvider.mealsForDay("Mon").isEmpty, true);
+    });
+  });
+
+  group('BannerToExplore Tests', () {
+    testWidgets('Explore button triggers onExplore callback', (tester) async {
+      bool explored = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BannerToExplore(
+              onExplore: () {
+                explored = true;
+              },
+            ),
+          ),
+        ),
+      );
+
+      final exploreBtn = find.text("Explore");
+      expect(exploreBtn, findsOneWidget);
+
+      await tester.tap(exploreBtn);
+      await tester.pump();
+      expect(explored, true);
     });
   });
 }

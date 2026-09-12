@@ -856,6 +856,111 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
+  void _confirmDeleteMeal(
+    BuildContext context,
+    MealPlanProvider mealProvider,
+    PlannedMeal meal,
+    String dayName,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Iconsax.trash, color: Colors.redAccent, size: 22),
+            SizedBox(width: 8),
+            Text("Remove Meal", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          "Are you sure you want to remove '${meal.recipeName}' from $dayName's plan?",
+          style: const TextStyle(fontSize: 14, color: Colors.black87),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              mealProvider.deleteMeal(meal.id);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("Removed ${meal.recipeName} from $dayName"),
+                  duration: const Duration(seconds: 3),
+                  action: SnackBarAction(
+                    label: "UNDO",
+                    textColor: Colors.amber,
+                    onPressed: () {
+                      mealProvider.addMeal(meal);
+                    },
+                  ),
+                ),
+              );
+            },
+            child: const Text("Remove", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmClearAllForDay(
+    BuildContext context,
+    MealPlanProvider mealProvider,
+    String dayCode,
+    String dayName,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_sweep_outlined, color: Colors.redAccent, size: 24),
+            SizedBox(width: 8),
+            Text("Clear Day's Plan", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          "Are you sure you want to remove all planned meals for $dayName?",
+          style: const TextStyle(fontSize: 14, color: Colors.black87),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              mealProvider.clearMealsForDay(dayCode);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("Cleared all meals for $dayName"),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            child: const Text("Clear All", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentDay = days[selectedDayIndex];
@@ -918,46 +1023,60 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                   days.length,
                   (index) {
                     final isSelected = selectedDayIndex == index;
+                    final dayMealCount = mealProvider.mealsForDay(days[index]).length;
                     return GestureDetector(
                       onTap: () {
                         setState(() {
                           selectedDayIndex = index;
                         });
                       },
-                      child: Container(
-                        width: 55,
-                        margin: const EdgeInsets.only(right: 12),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.only(right: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
                           color: isSelected ? kprimaryColor : Colors.white,
-                          borderRadius: BorderRadius.circular(18),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected
+                                ? kprimaryColor
+                                : Colors.grey.shade200,
+                            width: 1.2,
+                          ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.03),
+                              color: isSelected
+                                  ? kprimaryColor.withValues(alpha: 0.25)
+                                  : Colors.black.withValues(alpha: 0.03),
                               blurRadius: 6,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                        child: Column(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               days[index],
                               style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected ? Colors.white70 : Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              "${index + 10}",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w600,
                                 color: isSelected ? Colors.white : Colors.black87,
                               ),
                             ),
+                            if (dayMealCount > 0) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isSelected ? Colors.white : kprimaryColor,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1024,14 +1143,32 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                     color: Colors.black87,
                   ),
                 ),
-                Text(
-                  "${dayMeals.length} Scheduled",
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey,
+                if (dayMeals.isNotEmpty)
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade400,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    ),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text(
+                      "Clear Day",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onPressed: () => _confirmClearAllForDay(context, mealProvider, currentDay, fullDay),
+                  )
+                else
+                  Text(
+                    "0 Scheduled",
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey,
+                    ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -1110,7 +1247,14 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text("Removed ${meal.recipeName} from plan"),
-                        duration: const Duration(seconds: 1),
+                        duration: const Duration(seconds: 3),
+                        action: SnackBarAction(
+                          label: "UNDO",
+                          textColor: Colors.amber,
+                          onPressed: () {
+                            mealProvider.addMeal(meal);
+                          },
+                        ),
                       ),
                     );
                   },
@@ -1233,25 +1377,50 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                             ],
                           ),
                         ),
-                        IconButton(
-                          icon: Icon(
-                            meal.isCompleted
-                                ? Icons.check_circle
-                                : Icons.check_circle_outline,
-                            color: meal.isCompleted ? kBannerColor : Colors.grey,
-                            size: 26,
-                          ),
-                          onPressed: () {
-                            mealProvider.toggleCompleted(meal);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(meal.isCompleted
-                                    ? "Marked ${meal.recipeName} as pending"
-                                    : "Marked ${meal.recipeName} as completed!"),
-                                duration: const Duration(seconds: 1),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              icon: Icon(
+                                meal.isCompleted
+                                    ? Icons.check_circle
+                                    : Icons.check_circle_outline,
+                                color: meal.isCompleted ? kBannerColor : Colors.grey,
+                                size: 24,
                               ),
-                            );
-                          },
+                              tooltip: meal.isCompleted ? "Mark pending" : "Mark completed",
+                              onPressed: () {
+                                mealProvider.toggleCompleted(meal);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(meal.isCompleted
+                                        ? "Marked ${meal.recipeName} as pending"
+                                        : "Marked ${meal.recipeName} as completed!"),
+                                    duration: const Duration(seconds: 1),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 6),
+                            IconButton(
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                              icon: Icon(
+                                Iconsax.trash,
+                                color: Colors.red.shade400,
+                                size: 20,
+                              ),
+                              tooltip: "Remove from plan",
+                              onPressed: () => _confirmDeleteMeal(
+                                context,
+                                mealProvider,
+                                meal,
+                                fullDay,
+                              ),
+                            ),
+                          ],
                         ),
                             ],
                           ),
