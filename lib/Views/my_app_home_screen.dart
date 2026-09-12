@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:provider/provider.dart';
+import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Utils/constants.dart';
 import 'package:recipe_app2/Views/notifications_screen.dart';
 import 'package:recipe_app2/Views/view_all_items.dart';
@@ -10,6 +13,7 @@ import 'package:recipe_app2/Widget/food_items_display.dart';
 import 'package:recipe_app2/Widget/my_icon_button.dart';
 import 'package:recipe_app2/models/recipe_model.dart';
 import 'package:recipe_app2/services/mock_data_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MyAppHomeScreen extends StatefulWidget {
   const MyAppHomeScreen({super.key});
@@ -22,6 +26,37 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
   String category = "All";
   String searchQuery = "";
   final TextEditingController _searchController = TextEditingController();
+  bool _hasUnreadNotifications = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUnreadNotifications();
+  }
+
+  Future<void> _checkUnreadNotifications() async {
+    try {
+      final auth = Provider.of<AppAuthProvider>(context, listen: false);
+      final uid = auth.currentUser?.uid ?? 'guest';
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('saved_notifications_$uid');
+      if (raw != null && raw.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(raw);
+        final hasUnread = decoded.any((n) => (n['isRead'] as bool?) != true);
+        if (mounted) {
+          setState(() {
+            _hasUnreadNotifications = hasUnread;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _hasUnreadNotifications = true;
+          });
+        }
+      }
+    } catch (_) {}
+  }
 
   bool get _isFirebaseReady {
     try {
@@ -420,28 +455,53 @@ class _MyAppHomeScreenState extends State<MyAppHomeScreen> {
   }
 
   Widget headerParts() {
+    final auth = Provider.of<AppAuthProvider>(context);
+    final user = auth.currentUser;
+    final displayName = (user?.displayName != null && user!.displayName!.isNotEmpty)
+        ? user.displayName!.split(' ').first
+        : ((user?.email != null && user!.email!.isNotEmpty)
+            ? user.email!.split('@').first
+            : "Chef");
+
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          "What are you\ncooking today?",
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            height: 1.1,
-            color: Colors.black87,
-          ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Hello, $displayName 👋",
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade600,
+                letterSpacing: 0.1,
+              ),
+            ),
+            const SizedBox(height: 2),
+            const Text(
+              "What are you\ncooking today?",
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                height: 1.15,
+                color: Colors.black87,
+              ),
+            ),
+          ],
         ),
         const Spacer(),
         MyIconButton(
           icon: Iconsax.notification,
-          hasBadge: true,
-          pressed: () {
-            Navigator.push(
+          hasBadge: _hasUnreadNotifications,
+          pressed: () async {
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => const NotificationsScreen(),
               ),
             );
+            _checkUnreadNotifications();
           },
         ),
       ],

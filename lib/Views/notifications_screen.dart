@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:provider/provider.dart';
+import 'package:recipe_app2/Provider/auth_provider.dart';
 import 'package:recipe_app2/Utils/constants.dart';
 import 'package:recipe_app2/Views/app_main_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -60,14 +62,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _loadNotifications();
   }
 
-  List<AppNotificationItem> _getDefaultNotifications() {
+  List<AppNotificationItem> _getDefaultNotifications(String? userName, String? userEmail) {
+    final name = (userName != null && userName.isNotEmpty)
+        ? userName
+        : ((userEmail != null && userEmail.isNotEmpty)
+            ? userEmail.split('@').first
+            : "Chef");
     return [
+      AppNotificationItem(
+        id: "notif_welcome",
+        title: "Welcome, $name!",
+        message:
+            "Your kitchen dashboard is ready. Explore curated recipes, save favorites, and customize your meal plan.",
+        time: "Just now",
+        category: "update",
+        isRead: false,
+      ),
       AppNotificationItem(
         id: "notif_1",
         title: "Daily Meal Reminder",
         message:
             "Don't forget to check your planned meals for today! Stay on track with your healthy nutrition goals.",
-        time: "Just now",
+        time: "10m ago",
         category: "reminder",
         isRead: false,
       ),
@@ -101,12 +117,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     ];
   }
 
+  String _getStorageKey() {
+    try {
+      final auth = Provider.of<AppAuthProvider>(context, listen: false);
+      final uid = auth.currentUser?.uid ?? 'guest';
+      return 'saved_notifications_$uid';
+    } catch (_) {
+      return 'saved_notifications_guest';
+    }
+  }
+
   Future<void> _loadNotifications() async {
+    final auth = Provider.of<AppAuthProvider>(context, listen: false);
+    final user = auth.currentUser;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedJson = prefs.getString('saved_notifications');
+      final savedJson = prefs.getString(_getStorageKey());
       if (savedJson != null && savedJson.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(savedJson);
+        if (!mounted) return;
         setState(() {
           _notifications = decoded
               .map((item) =>
@@ -118,8 +147,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     } catch (_) {}
 
+    if (!mounted) return;
     setState(() {
-      _notifications = _getDefaultNotifications();
+      _notifications = _getDefaultNotifications(user?.displayName, user?.email);
       _isLoading = false;
     });
     _saveNotifications();
@@ -130,7 +160,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final prefs = await SharedPreferences.getInstance();
       final encoded =
           jsonEncode(_notifications.map((n) => n.toJson()).toList());
-      await prefs.setString('saved_notifications', encoded);
+      await prefs.setString(_getStorageKey(), encoded);
     } catch (_) {}
   }
 

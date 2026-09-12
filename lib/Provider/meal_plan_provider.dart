@@ -109,37 +109,75 @@ class PlannedMeal {
 class MealPlanProvider extends ChangeNotifier {
   List<PlannedMeal> _meals = [];
   bool _isLoading = false;
+  String? _activeUid;
 
   List<PlannedMeal> get meals => _meals;
   bool get isLoading => _isLoading;
 
-  MealPlanProvider() {
-    _init();
+  String get currentUid {
+    if (_activeUid != null && _activeUid!.isNotEmpty) {
+      return _activeUid!;
+    }
+    final user = _auth?.currentUser;
+    if (user != null && !user.isAnonymous) {
+      return user.uid;
+    }
+    return 'guest';
   }
 
+  Future<void>? _initFuture;
+
+  MealPlanProvider() {
+    _initFuture = _init();
+  }
+
+  Future<void> ensureInitialized() => _initFuture ?? Future.value();
+
   Future<void> _init() async {
-    // 1. Immediately restore meals from local disk so user's meals NEVER reset
+    // 1. Immediately restore meals from local disk for the current user
     await _loadFromPrefs();
     // 2. Sync with cloud in background
     await loadMeals();
     try {
       if (Firebase.apps.isNotEmpty) {
         FirebaseAuth.instance.authStateChanges().listen((user) {
-          loadMeals();
+          checkUserChanged(user?.uid);
         });
       }
     } catch (_) {}
   }
 
+  String _getStorageKey() {
+    return 'saved_meals_$currentUid';
+  }
+
+  /// Verifies if user changed, and cleanly resets in-memory data for the new account
+  Future<void> checkUserChanged(String? newUid) async {
+    await ensureInitialized();
+    final resolved = (newUid != null && newUid.isNotEmpty) ? newUid : 'guest';
+    if (_activeUid != resolved) {
+      _activeUid = resolved;
+      await onUserChanged();
+    }
+  }
+
+  /// Clears in-memory meals and reloads for the newly active user
+  Future<void> onUserChanged() async {
+    _meals = [];
+    notifyListeners();
+    await _loadFromPrefs();
+    await loadMeals();
+  }
+
   Future<void> _loadFromPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('saved_meals');
+      final raw = prefs.getString(_getStorageKey());
       if (raw != null && raw.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(raw);
-        _meals = decoded
+        _meals = _deduplicate(decoded
             .map((item) => PlannedMeal.fromJson(item as Map<String, dynamic>))
-            .toList();
+            .toList());
         notifyListeners();
       }
     } catch (e) {
@@ -150,8 +188,9 @@ class MealPlanProvider extends ChangeNotifier {
   Future<void> _saveToPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      _meals = _deduplicate(_meals);
       final jsonList = _meals.map((m) => m.toJson()).toList();
-      await prefs.setString('saved_meals', jsonEncode(jsonList));
+      await prefs.setString(_getStorageKey(), jsonEncode(jsonList));
     } catch (e) {
       debugPrint("Error saving meals to disk: $e");
     }
@@ -175,11 +214,11 @@ class MealPlanProvider extends ChangeNotifier {
     final firestore = _firestore;
     if (firestore == null) return null;
 
-    final user = _auth?.currentUser;
-    if (user != null && !user.isAnonymous) {
-      return firestore.collection("users").doc(user.uid).collection("mealPlans");
+    final uid = currentUid;
+    if (uid != 'guest') {
+      return firestore.collection("users").doc(uid).collection("mealPlans");
     }
-    return firestore.collection("mealPlans");
+    return null; // Guest user meals remain local on device
   }
 
   List<PlannedMeal> mealsForDay(String day) {
@@ -197,6 +236,19 @@ class MealPlanProvider extends ChangeNotifier {
     return total;
   }
 
+  List<PlannedMeal> _deduplicate(List<PlannedMeal> list) {
+    final seen = <String>{};
+    final result = <PlannedMeal>[];
+    for (var m in list) {
+      final key = "${m.day.toLowerCase()}_${m.mealType.toLowerCase()}_${m.recipeName.toLowerCase()}";
+      if (!seen.contains(key)) {
+        seen.add(key);
+        result.add(m);
+      }
+    }
+    return result;
+  }
+
   // Load from Firestore with deduplication and accurate sync
   Future<void> loadMeals() async {
     _isLoading = true;
@@ -209,21 +261,15 @@ class MealPlanProvider extends ChangeNotifier {
         if (snapshot.docs.isNotEmpty) {
           final cloudMeals = snapshot.docs.map((d) => PlannedMeal.fromFirestore(d)).toList();
 
-          // Build a deduplicated map of meals.
-          // Cloud documents take precedence.
+          // Build a deduplicated map of meals. Cloud documents take precedence.
           final Map<String, PlannedMeal> unifiedMeals = {};
-
-          // First add cloud meals keyed by their document ID
           for (var cm in cloudMeals) {
             unifiedMeals[cm.id] = cm;
           }
 
-          // Then merge local meals:
-          // If a local meal has a temporary local ID ('plan_' or 'meal_') but matches an existing
-          // cloud meal (same day, mealType, and recipeName), discard the temporary duplicate!
+          // Merge local un-synced meals for THIS user
           for (var lm in _meals) {
             if (unifiedMeals.containsKey(lm.id)) {
-              // Already present from cloud
               continue;
             }
             final isDuplicateOfCloud = cloudMeals.any(
@@ -237,29 +283,40 @@ class MealPlanProvider extends ChangeNotifier {
             }
           }
 
-          _meals = unifiedMeals.values.toList();
+          _meals = _deduplicate(unifiedMeals.values.toList());
           _correctKnownRecipeImages();
           await _saveToPrefs();
           _isLoading = false;
           notifyListeners();
           return;
-        } else if (_meals.isEmpty) {
-          // Auto-seed default meals only if completely empty
-          await _seedInitialMeals(col);
-          _correctKnownRecipeImages();
-          await _saveToPrefs();
-          return;
+        } else {
+          // Cloud collection is empty for this user.
+          final prefs = await SharedPreferences.getInstance();
+          final hasSeeded = prefs.getBool('meal_plan_seeded_$currentUid') ?? false;
+          if (!hasSeeded && _meals.isEmpty) {
+            await _seedInitialMeals(col);
+            await prefs.setBool('meal_plan_seeded_$currentUid', true);
+            _correctKnownRecipeImages();
+            await _saveToPrefs();
+            return;
+          }
         }
       }
     } catch (e) {
       debugPrint("Meal plan load note: $e");
     }
 
-    // Fallback default sample meals only if completely empty
+    // Fallback default sample meals only if completely empty (e.g. for guest chef)
     if (_meals.isEmpty) {
-      _meals = _getDefaultSampleMeals();
-      await _saveToPrefs();
+      final prefs = await SharedPreferences.getInstance();
+      final hasSeeded = prefs.getBool('meal_plan_seeded_$currentUid') ?? false;
+      if (!hasSeeded) {
+        _meals = _getDefaultSampleMeals();
+        await prefs.setBool('meal_plan_seeded_$currentUid', true);
+        await _saveToPrefs();
+      }
     }
+    _meals = _deduplicate(_meals);
     _correctKnownRecipeImages();
     _isLoading = false;
     notifyListeners();
@@ -270,7 +327,6 @@ class MealPlanProvider extends ChangeNotifier {
     bool changed = false;
     for (int i = 0; i < _meals.length; i++) {
       final m = _meals[i];
-      // Match against official mock recipes
       for (var def in MockDataService.defaultRecipes) {
         if (def['name'].toString().toLowerCase() == m.recipeName.toLowerCase()) {
           final officialImg = def['image']?.toString() ?? "";
@@ -289,6 +345,7 @@ class MealPlanProvider extends ChangeNotifier {
 
   // Add meal - Instant local update + await Firestore document ID so it never doubles on restart!
   Future<void> addMeal(PlannedMeal meal) async {
+    await ensureInitialized();
     // 1. Check if identical meal is already in local list for this day & mealType
     final existingIdx = _meals.indexWhere(
       (m) =>
@@ -298,15 +355,15 @@ class MealPlanProvider extends ChangeNotifier {
     );
 
     if (existingIdx != -1) {
-      // Meal already scheduled for this slot, update it instead of creating a clone
       _meals[existingIdx] = meal;
       notifyListeners();
       await _saveToPrefs();
       return;
     }
 
-    // 2. Immediately add to local state and persist to disk in 0ms
+    // 2. Immediately add to local state and persist to disk
     _meals.insert(0, meal);
+    _meals = _deduplicate(_meals);
     notifyListeners();
     await _saveToPrefs();
 
@@ -328,6 +385,7 @@ class MealPlanProvider extends ChangeNotifier {
 
   // Toggle meal completion
   Future<void> toggleCompleted(PlannedMeal meal) async {
+    await ensureInitialized();
     final newStatus = !meal.isCompleted;
     final index = _meals.indexWhere((m) => m.id == meal.id);
     if (index != -1) {
@@ -348,6 +406,7 @@ class MealPlanProvider extends ChangeNotifier {
 
   // Delete meal
   Future<void> deleteMeal(String id) async {
+    await ensureInitialized();
     _meals.removeWhere((m) => m.id == id);
     notifyListeners();
     await _saveToPrefs();
@@ -370,7 +429,7 @@ class MealPlanProvider extends ChangeNotifier {
       } catch (_) {}
     }
     final snap = await col.get();
-    _meals = snap.docs.map((d) => PlannedMeal.fromFirestore(d)).toList();
+    _meals = _deduplicate(snap.docs.map((d) => PlannedMeal.fromFirestore(d)).toList());
     _isLoading = false;
     notifyListeners();
   }

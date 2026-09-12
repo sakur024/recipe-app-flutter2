@@ -587,6 +587,11 @@ class AppAuthProvider extends ChangeNotifier {
     await _clearSession();
     try {
       if (!kIsWeb) {
+        try {
+          await _googleSignIn
+              .disconnect()
+              .timeout(const Duration(seconds: 2), onTimeout: () => null);
+        } catch (_) {}
         await _googleSignIn
             .signOut()
             .timeout(const Duration(seconds: 3), onTimeout: () => null);

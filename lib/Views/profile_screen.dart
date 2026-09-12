@@ -20,21 +20,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _mealReminders = true;
   String _selectedUnit = "Metric (Grams, ml, °C)";
   String _selectedDiet = "No Restrictions";
+  String? _currentUid;
 
   @override
   void initState() {
     super.initState();
-    _loadPreferences();
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final authProvider = Provider.of<AppAuthProvider>(context);
+    final uid = authProvider.currentUser?.uid ?? 'guest';
+    if (_currentUid != uid) {
+      _currentUid = uid;
+      _loadPreferences();
+    }
+  }
+
+  String _prefKey(String key) => "${key}_${_currentUid ?? 'guest'}";
 
   Future<void> _loadPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
       setState(() {
-        _cookingNotifications = prefs.getBool('pref_cooking_notifs') ?? true;
-        _mealReminders = prefs.getBool('pref_meal_reminders') ?? true;
-        _selectedUnit = prefs.getString('pref_unit') ?? "Metric (Grams, ml, °C)";
-        _selectedDiet = prefs.getString('pref_diet') ?? "No Restrictions";
+        _cookingNotifications = prefs.getBool(_prefKey('pref_cooking_notifs')) ?? true;
+        _mealReminders = prefs.getBool(_prefKey('pref_meal_reminders')) ?? true;
+        _selectedUnit = prefs.getString(_prefKey('pref_unit')) ?? "Metric (Grams, ml, °C)";
+        _selectedDiet = prefs.getString(_prefKey('pref_diet')) ?? "No Restrictions";
       });
     } catch (_) {}
   }
@@ -42,10 +56,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _savePreference(String key, dynamic value) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final fullKey = _prefKey(key);
       if (value is bool) {
-        await prefs.setBool(key, value);
+        await prefs.setBool(fullKey, value);
       } else if (value is String) {
-        await prefs.setString(key, value);
+        await prefs.setString(fullKey, value);
       }
     } catch (_) {}
   }
@@ -589,6 +604,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 setState(() {
                   _selectedUnit = "Metric (Grams, ml, °C)";
                 });
+                _savePreference('pref_unit', "Metric (Grams, ml, °C)");
                 Navigator.pop(ctx);
               },
             ),
@@ -602,6 +618,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 setState(() {
                   _selectedUnit = "Imperial (oz, cups, °F)";
                 });
+                _savePreference('pref_unit', "Imperial (oz, cups, °F)");
                 Navigator.pop(ctx);
               },
             ),
@@ -644,6 +661,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   setState(() {
                     _selectedDiet = d;
                   });
+                  _savePreference('pref_diet', d);
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
