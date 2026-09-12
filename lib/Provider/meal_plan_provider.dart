@@ -128,16 +128,18 @@ class MealPlanProvider extends ChangeNotifier {
   Future<void>? _initFuture;
 
   MealPlanProvider() {
+    // 0ms instant display: initialize with defaults so meals are NEVER blank/loading
+    _meals = _getDefaultSampleMeals();
     _initFuture = _init();
   }
 
   Future<void> ensureInitialized() => _initFuture ?? Future.value();
 
   Future<void> _init() async {
-    // 1. Immediately restore meals from local disk for the current user
+    // 1. Immediately restore meals from local disk for the current user (0ms)
     await _loadFromPrefs();
-    // 2. Sync with cloud in background
-    await loadMeals();
+    // 2. Sync with cloud in background without blocking UI
+    loadMeals();
     try {
       if (Firebase.apps.isNotEmpty) {
         FirebaseAuth.instance.authStateChanges().listen((user) {
@@ -166,7 +168,11 @@ class MealPlanProvider extends ChangeNotifier {
     _meals = [];
     notifyListeners();
     await _loadFromPrefs();
-    await loadMeals();
+    if (_meals.isEmpty) {
+      _meals = _getDefaultSampleMeals();
+      notifyListeners();
+    }
+    loadMeals();
   }
 
   Future<void> _loadFromPrefs() async {
@@ -175,10 +181,13 @@ class MealPlanProvider extends ChangeNotifier {
       final raw = prefs.getString(_getStorageKey());
       if (raw != null && raw.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(raw);
-        _meals = _deduplicate(decoded
+        final loaded = decoded
             .map((item) => PlannedMeal.fromJson(item as Map<String, dynamic>))
-            .toList());
-        notifyListeners();
+            .toList();
+        if (loaded.isNotEmpty) {
+          _meals = _deduplicate(loaded);
+          notifyListeners();
+        }
       }
     } catch (e) {
       debugPrint("Error loading meals from disk: $e");
@@ -249,15 +258,17 @@ class MealPlanProvider extends ChangeNotifier {
     return result;
   }
 
-  // Load from Firestore with deduplication and accurate sync
+  // Load from Firestore with deduplication and fast timeout
   Future<void> loadMeals() async {
-    _isLoading = true;
-    notifyListeners();
+    if (_meals.isEmpty) {
+      _isLoading = true;
+      notifyListeners();
+    }
 
     try {
       final col = _getCollection();
       if (col != null) {
-        final snapshot = await col.get().timeout(const Duration(seconds: 4));
+        final snapshot = await col.get().timeout(const Duration(seconds: 3));
         if (snapshot.docs.isNotEmpty) {
           final cloudMeals = snapshot.docs.map((d) => PlannedMeal.fromFirestore(d)).toList();
 
@@ -286,40 +297,32 @@ class MealPlanProvider extends ChangeNotifier {
           _meals = _deduplicate(unifiedMeals.values.toList());
           _correctKnownRecipeImages();
           await _saveToPrefs();
-          _isLoading = false;
-          notifyListeners();
-          return;
         } else {
           // Cloud collection is empty for this user.
           final prefs = await SharedPreferences.getInstance();
           final hasSeeded = prefs.getBool('meal_plan_seeded_$currentUid') ?? false;
-          if (!hasSeeded && _meals.isEmpty) {
-            await _seedInitialMeals(col);
+          if (!hasSeeded) {
             await prefs.setBool('meal_plan_seeded_$currentUid', true);
-            _correctKnownRecipeImages();
-            await _saveToPrefs();
-            return;
+            if (_meals.isEmpty) {
+              _meals = _getDefaultSampleMeals();
+              await _saveToPrefs();
+            }
+            _seedInitialMeals(col);
           }
         }
       }
     } catch (e) {
       debugPrint("Meal plan load note: $e");
-    }
-
-    // Fallback default sample meals only if completely empty (e.g. for guest chef)
-    if (_meals.isEmpty) {
-      final prefs = await SharedPreferences.getInstance();
-      final hasSeeded = prefs.getBool('meal_plan_seeded_$currentUid') ?? false;
-      if (!hasSeeded) {
+    } finally {
+      if (_meals.isEmpty) {
         _meals = _getDefaultSampleMeals();
-        await prefs.setBool('meal_plan_seeded_$currentUid', true);
-        await _saveToPrefs();
+        _saveToPrefs();
       }
+      _meals = _deduplicate(_meals);
+      _correctKnownRecipeImages();
+      _isLoading = false;
+      notifyListeners();
     }
-    _meals = _deduplicate(_meals);
-    _correctKnownRecipeImages();
-    _isLoading = false;
-    notifyListeners();
   }
 
   // Ensure any cached meals with outdated photos (e.g. Oatmeal Banana Porridge) get the latest verified image
@@ -343,9 +346,8 @@ class MealPlanProvider extends ChangeNotifier {
     }
   }
 
-  // Add meal - Instant local update + await Firestore document ID so it never doubles on restart!
+  // Add meal - Instant 0ms local update + non-blocking background Firestore sync
   Future<void> addMeal(PlannedMeal meal) async {
-    await ensureInitialized();
     // 1. Check if identical meal is already in local list for this day & mealType
     final existingIdx = _meals.indexWhere(
       (m) =>
@@ -357,41 +359,48 @@ class MealPlanProvider extends ChangeNotifier {
     if (existingIdx != -1) {
       _meals[existingIdx] = meal;
       notifyListeners();
-      await _saveToPrefs();
+      _saveToPrefs();
+      _syncMealToCloud(meal);
       return;
     }
 
-    // 2. Immediately add to local state and persist to disk
+    // 2. Immediately add to local state and persist to disk in 0ms!
     _meals.insert(0, meal);
     _meals = _deduplicate(_meals);
     notifyListeners();
-    await _saveToPrefs();
+    _saveToPrefs();
 
-    // 3. Persist to Firestore and update the meal's ID with the real Firestore ID
+    // 3. Persist to Firestore in background without blocking UI
+    _syncMealToCloud(meal);
+  }
+
+  void _syncMealToCloud(PlannedMeal meal) {
     try {
       final col = _getCollection();
       if (col != null) {
-        final docRef = await col.add(meal.toMap()).timeout(const Duration(seconds: 4));
-        final idx = _meals.indexWhere((m) => m.id == meal.id);
-        if (idx != -1) {
-          _meals[idx] = meal.copyWith(id: docRef.id);
-          await _saveToPrefs();
-        }
+        col.add(meal.toMap()).then((docRef) {
+          final idx = _meals.indexWhere((m) => m.id == meal.id);
+          if (idx != -1) {
+            _meals[idx] = meal.copyWith(id: docRef.id);
+            _saveToPrefs();
+          }
+        }).catchError((e) {
+          debugPrint("Firestore addMeal background sync note: $e");
+        });
       }
     } catch (e) {
-      debugPrint("Firestore addMeal note (saved locally): $e");
+      debugPrint("Firestore addMeal note: $e");
     }
   }
 
-  // Toggle meal completion
+  // Toggle meal completion - Instant 0ms response
   Future<void> toggleCompleted(PlannedMeal meal) async {
-    await ensureInitialized();
     final newStatus = !meal.isCompleted;
     final index = _meals.indexWhere((m) => m.id == meal.id);
     if (index != -1) {
       _meals[index] = meal.copyWith(isCompleted: newStatus);
       notifyListeners();
-      await _saveToPrefs();
+      _saveToPrefs();
     }
 
     try {
@@ -404,12 +413,11 @@ class MealPlanProvider extends ChangeNotifier {
     }
   }
 
-  // Delete meal
+  // Delete meal - Instant 0ms response
   Future<void> deleteMeal(String id) async {
-    await ensureInitialized();
     _meals.removeWhere((m) => m.id == id);
     notifyListeners();
-    await _saveToPrefs();
+    _saveToPrefs();
 
     try {
       final col = _getCollection();
@@ -421,17 +429,12 @@ class MealPlanProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _seedInitialMeals(CollectionReference col) async {
+  void _seedInitialMeals(CollectionReference col) {
     final defaults = _getDefaultSampleMeals();
+    // Push in background without blocking UI
     for (var m in defaults) {
-      try {
-        await col.add(m.toMap());
-      } catch (_) {}
+      col.add(m.toMap()).then((_) {}, onError: (_) {});
     }
-    final snap = await col.get();
-    _meals = _deduplicate(snap.docs.map((d) => PlannedMeal.fromFirestore(d)).toList());
-    _isLoading = false;
-    notifyListeners();
   }
 
   List<PlannedMeal> _getDefaultSampleMeals() {

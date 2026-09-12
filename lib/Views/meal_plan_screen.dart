@@ -771,26 +771,20 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                         imageUrl: imageUrl,
                       );
 
-                      await Provider.of<MealPlanProvider>(context,
-                              listen: false)
-                          .addMeal(newMeal);
-
-                      if (ctx.mounted) {
-                        Navigator.pop(ctx);
-                        final dayIdx = days.indexOf(chosenDay);
-                        if (dayIdx != -1) {
-                          setState(() {
-                            selectedDayIndex = dayIdx;
-                          });
-                        }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content:
-                                Text("Scheduled '$mealName' for $chosenDay!"),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
+                      Provider.of<MealPlanProvider>(context, listen: false).addMeal(newMeal);
+                      Navigator.pop(ctx);
+                      final dayIdx = days.indexOf(chosenDay);
+                      if (dayIdx != -1) {
+                        setState(() {
+                          selectedDayIndex = dayIdx;
+                        });
                       }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("Scheduled '$mealName' for $chosenDay!"),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
                     },
                     child: Text(
                       activeTab == 0 && selectedRecipe != null
@@ -1042,11 +1036,11 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             ),
             const SizedBox(height: 12),
 
-            if (mealProvider.isLoading)
+            if (mealProvider.isLoading && dayMeals.isEmpty && mealProvider.meals.isEmpty)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
-                  child: CircularProgressIndicator(),
+                  child: CircularProgressIndicator(color: kprimaryColor),
                 ),
               )
             else if (dayMeals.isEmpty)

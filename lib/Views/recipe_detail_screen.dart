@@ -570,7 +570,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  onPressed: () async {
+                  onPressed: () {
                     final meal = PlannedMeal(
                       id: "plan_${DateTime.now().millisecondsSinceEpoch}",
                       day: chosenDay,
@@ -584,16 +584,14 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                           ? img
                           : "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80",
                     );
-                    await Provider.of<MealPlanProvider>(context, listen: false).addMeal(meal);
-                    if (ctx.mounted) {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text("Scheduled '$recipeName' for $chosenDay!"),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
+                    Provider.of<MealPlanProvider>(context, listen: false).addMeal(meal);
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Scheduled '$recipeName' for $chosenDay!"),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
                   },
                   child: const Text(
                     "Confirm Schedule",
