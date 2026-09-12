@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:recipe_app2/Utils/constants.dart';
 
 class QuantityIncrementDecrement extends StatelessWidget {
   final int currentNumber;
@@ -16,35 +17,74 @@ class QuantityIncrementDecrement extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
         border: Border.all(
-          width: 2,
-          color: Colors.grey.shade300,
+          color: Colors.grey.shade200,
+          width: 1,
         ),
-        borderRadius: BorderRadius.circular(25),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            onPressed: onRemov,
-            icon: const Icon(Iconsax.minus, size: 18),
-            splashRadius: 20,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            "$currentNumber",
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: onRemov,
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: kbackgroundColor,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Iconsax.minus, size: 16, color: Colors.black87),
+              ),
             ),
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: onAdd,
-            icon: const Icon(Iconsax.add, size: 18),
-            splashRadius: 20,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Text(
+              "$currentNumber",
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: onAdd,
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: kprimaryColor,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: kprimaryColor.withValues(alpha: 0.35),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(Iconsax.add, size: 16, color: Colors.white),
+              ),
+            ),
           ),
         ],
       ),

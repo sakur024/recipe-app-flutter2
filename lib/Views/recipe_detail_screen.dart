@@ -382,65 +382,106 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   }
 
   Widget startCookingAndFavoriteButton(FavoriteProvider provider, dynamic itemRef) {
+    final bool isFav = provider.isExist(itemRef);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
       child: Row(
         children: [
+          // Add to Plan Primary Button with gradient & glow
           Expanded(
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kprimaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+            child: Container(
+              height: 54,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    Color(0xFF56AB2F),
+                    Color(0xFFA8E063),
+                  ],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
                 ),
-                elevation: 0,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF56AB2F).withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              onPressed: () {
-                _showScheduleDialog(context);
-              },
-              icon: const Icon(Iconsax.calendar_add, size: 20),
-              label: const Text(
-                "Add to Plan",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: () => _showScheduleDialog(context),
+                  child: const Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Iconsax.calendar_add, size: 22, color: Colors.white),
+                        SizedBox(width: 10),
+                        Text(
+                          "Add to Meal Plan",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Colors.white,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
+          // Heart Favorite Button
           Container(
+            width: 54,
+            height: 54,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
+              color: isFav ? const Color(0xFFFFF0F0) : Colors.white,
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: Colors.grey.shade300,
+                color: isFav ? const Color(0xFFFF8A8A) : Colors.grey.shade300,
                 width: 1.5,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: isFav
+                      ? const Color(0xFFFF5252).withValues(alpha: 0.2)
+                      : Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: IconButton(
-              onPressed: () {
-                provider.toggleFavorite(itemRef);
-              },
-              icon: Icon(
-                provider.isExist(itemRef)
-                    ? Iconsax.heart5
-                    : Iconsax.heart,
-                color: provider.isExist(itemRef)
-                    ? Colors.red
-                    : Colors.black,
-                size: 22,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => provider.toggleFavorite(itemRef),
+                child: Center(
+                  child: Icon(
+                    isFav ? Iconsax.heart5 : Iconsax.heart,
+                    color: isFav ? const Color(0xFFFF3B30) : Colors.black87,
+                    size: 24,
+                  ),
+                ),
               ),
             ),
           ),

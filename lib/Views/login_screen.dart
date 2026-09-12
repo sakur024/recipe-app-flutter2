@@ -300,16 +300,33 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                             ),
                             const SizedBox(height: 20),
-                            SizedBox(
+                            Container(
                               width: double.infinity,
-                              height: 50,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF56AB2F),
+                                    Color(0xFFA8E063),
+                                  ],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF56AB2F).withValues(alpha: 0.35),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
                               child: ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: kprimaryColor,
+                                  backgroundColor: Colors.transparent,
                                   foregroundColor: Colors.white,
-                                  elevation: 2,
-                                  shadowColor:
-                                      kprimaryColor.withValues(alpha: 0.3),
+                                  elevation: 0,
+                                  shadowColor: Colors.transparent,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16),
                                   ),
@@ -536,16 +553,33 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                             ),
                             const SizedBox(height: 14),
-                            SizedBox(
+                            Container(
                               width: double.infinity,
-                              height: 50,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF56AB2F),
+                                    Color(0xFFA8E063),
+                                  ],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF56AB2F).withValues(alpha: 0.35),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
                               child: ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: kprimaryColor,
+                                  backgroundColor: Colors.transparent,
                                   foregroundColor: Colors.white,
-                                  elevation: 2,
-                                  shadowColor:
-                                      kprimaryColor.withValues(alpha: 0.3),
+                                  elevation: 0,
+                                  shadowColor: Colors.transparent,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(16),
                                   ),
@@ -623,105 +657,124 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 18),
 
                   // Google Sign In Button
-                  OutlinedButton(
-                    onPressed: authProvider.isLoading
-                        ? null
-                        : () async {
-                            final success =
-                                await authProvider.signInWithGoogle();
-                            if (!success &&
-                                context.mounted &&
-                                authProvider.errorMessage != null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(authProvider.errorMessage!),
-                                  backgroundColor: Colors.red.shade800,
-                                  duration: const Duration(seconds: 5),
-                                ),
-                              );
-                            }
-                          },
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: Colors.grey.shade300),
-                      backgroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Image.network(
-                          "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/120px-Google_%22G%22_logo.svg.png",
-                          height: 22,
-                          width: 22,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Icon(
-                            Icons.g_mobiledata,
-                            size: 26,
-                            color: Colors.red,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          "Continue with Google",
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
+                  Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey.shade200, width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
                         ),
                       ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: authProvider.isLoading
+                            ? null
+                            : () async {
+                                final success =
+                                    await authProvider.signInWithGoogle();
+                                if (!success &&
+                                    context.mounted &&
+                                    authProvider.errorMessage != null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(authProvider.errorMessage!),
+                                      backgroundColor: Colors.red.shade800,
+                                      duration: const Duration(seconds: 5),
+                                    ),
+                                  );
+                                }
+                              },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Image.network(
+                              "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/120px-Google_%22G%22_logo.svg.png",
+                              height: 22,
+                              width: 22,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(
+                                Icons.g_mobiledata,
+                                size: 26,
+                                color: Colors.red,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              "Continue with Google",
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),
 
                   // Guest Mode Button - High visibility & instant feedback!
-                  InkWell(
-                    onTap: () async {
-                      final success = await authProvider.signInAsGuest();
-                      if (context.mounted && success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                "Welcome, Guest Chef! Explore delicious recipes!"),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 14, horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: kprimaryColor.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: kprimaryColor.withValues(alpha: 0.25),
-                          width: 1.2,
-                        ),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Iconsax.profile_2user,
-                              color: kprimaryColor, size: 20),
-                          SizedBox(width: 10),
-                          Text(
-                            "Explore as Guest Chef",
-                            style: TextStyle(
-                              color: kprimaryColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                          SizedBox(width: 6),
-                          Icon(Icons.arrow_forward_rounded,
-                              color: kprimaryColor, size: 16),
+                  Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          kprimaryColor.withValues(alpha: 0.12),
+                          kprimaryColor.withValues(alpha: 0.05),
                         ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: kprimaryColor.withValues(alpha: 0.3),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          final success = await authProvider.signInAsGuest();
+                          if (context.mounted && success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                    "Welcome, Guest Chef! Explore delicious recipes!"),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Iconsax.profile_2user,
+                                color: kprimaryColor, size: 20),
+                            SizedBox(width: 10),
+                            Text(
+                              "Explore as Guest Chef",
+                              style: TextStyle(
+                                color: kprimaryColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            SizedBox(width: 6),
+                            Icon(Icons.arrow_forward_rounded,
+                                color: kprimaryColor, size: 16),
+                          ],
+                        ),
                       ),
                     ),
                   ),
